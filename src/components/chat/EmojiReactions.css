@@ -1,0 +1,58 @@
+.rx-wrap { position: relative; margin-top: 4px; }
+
+.rx-chips {
+  display: flex; flex-wrap: wrap; gap: 4px;
+  padding: 2px 4px;
+}
+.msg-row.own .rx-chips { justify-content: flex-end; }
+
+.rx-chip {
+  display: inline-flex; align-items: center; gap: 4px;
+  padding: 3px 9px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  font-size: 12px; font-weight: 700;
+  color: var(--text);
+  cursor: pointer;
+  box-shadow: var(--clay-shadow-sm);
+  transition: all 0.15s var(--ease);
+}
+.rx-chip:hover { transform: translateY(-1px); background: var(--surface-2); }
+.rx-chip.mine {
+  background: var(--primary-soft);
+  color: var(--primary);
+  border-color: var(--primary);
+}
+.rx-chip.rx-add {
+  background: var(--surface-3);
+  color: var(--text-muted);
+}
+.rx-chip.rx-add:hover { background: var(--primary-soft); color: var(--primary); }
+.rx-emoji { font-size: 14px; }
+.rx-count { font-variant-numeric: tabular-nums; }
+
+.rx-picker {
+  position: absolute; bottom: 100%; left: 4px;
+  margin-bottom: 4px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--r-md);
+  box-shadow: var(--clay-shadow-lg);
+  padding: 8px;
+  z-index: 15;
+}
+.msg-row.own .rx-picker { left: auto; right: 4px; }
+.rx-picker-grid {
+  display: grid; grid-template-columns: repeat(5, 1fr); gap: 4px;
+  max-width: 220px;
+}
+.rx-picker-btn {
+  width: 34px; height: 34px;
+  font-size: 20px;
+  background: transparent; border: none;
+  border-radius: var(--r-xs);
+  cursor: pointer;
+  transition: transform 0.12s var(--ease), background 0.12s var(--ease);
+}
+.rx-picker-btn:hover { background: var(--surface-3); transform: scale(1.15); }
