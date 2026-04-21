@@ -1,0 +1,56 @@
+.theme-toggle {
+  position: relative;
+  display: inline-flex; align-items: center;
+  padding: 4px;
+  width: 112px; height: 38px;
+  background: var(--surface-3);
+  border: 1px solid var(--border);
+  border-radius: var(--r-full);
+  box-shadow: var(--clay-inset);
+  cursor: pointer;
+  transition: all 0.2s var(--ease);
+}
+.theme-toggle:hover { border-color: var(--border-strong); }
+
+.theme-toggle.compact {
+  width: 38px; height: 38px; padding: 0;
+  justify-content: center;
+  background: transparent;
+  box-shadow: none;
+}
+.theme-toggle.compact:hover { background: var(--surface-hover); }
+
+.theme-thumb {
+  position: absolute; top: 3px;
+  width: 30px; height: 30px;
+  display: flex; align-items: center; justify-content: center;
+  background: var(--surface);
+  border-radius: 50%;
+  box-shadow: var(--clay-shadow-sm);
+  color: var(--primary);
+  transition: left 0.3s var(--ease-out), transform 0.3s var(--ease-out), background 0.3s var(--ease);
+  z-index: 2;
+}
+.theme-thumb.light { left: 3px; }
+.theme-thumb.dark  { left: calc(100% - 33px); background: var(--accent-soft); color: var(--accent); }
+
+.theme-toggle.compact .theme-thumb {
+  position: static; width: 100%; height: 100%;
+  background: transparent; box-shadow: none;
+}
+.theme-toggle.compact:hover .theme-thumb { color: var(--primary); }
+
+.theme-track-labels {
+  position: relative;
+  display: flex; justify-content: space-around;
+  width: 100%;
+  font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em;
+  pointer-events: none;
+  z-index: 1;
+}
+.theme-track-labels span {
+  color: var(--text-muted);
+  padding: 0 6px;
+  transition: color 0.3s var(--ease);
+}
+.theme-track-labels span.active { color: transparent; }

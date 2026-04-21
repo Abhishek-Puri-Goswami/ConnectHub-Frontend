@@ -56,3 +56,4 @@ Backend API expected at `/api/v1` (or `http://localhost:8080` in dev mode for OA
 - [x] Initial infrastructure and config
 - [x] Static Assets and Public files
 - [x] State management and API services
+- [x] UI Components and Core Styling
