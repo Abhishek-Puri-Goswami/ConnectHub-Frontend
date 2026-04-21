@@ -1,0 +1,228 @@
+/* UpgradeModal.css — Premium upgrade modal */
+
+.upgrade-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.65);
+  backdrop-filter: blur(6px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 5000;
+  animation: fadeIn 0.2s ease;
+}
+
+.upgrade-card {
+  background: var(--surface, #ffffff);
+  border: 1px solid var(--border, #EADFC9);
+  border-radius: 20px;
+  padding: 2rem;
+  width: min(420px, 94vw);
+  position: relative;
+  box-shadow:
+    0 0 0 1px rgba(124, 58, 237, 0.08),
+    0 18px 42px rgba(45, 36, 56, 0.15),
+    0 0 56px rgba(124, 58, 237, 0.08);
+  animation: slideUp 0.25s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+}
+
+.upgrade-close {
+  position: absolute;
+  top: 1rem;
+  right: 1rem;
+  background: var(--surface-3, #F5EDE0);
+  border: 1px solid var(--border, #EADFC9);
+  border-radius: 8px;
+  color: var(--text-muted, #8B7F9E);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  transition: all 0.15s;
+}
+.upgrade-close:hover {
+  background: var(--surface-hover, #F0E5D3);
+  color: var(--text, #2D2438);
+}
+
+/* hero */
+.upgrade-hero {
+  text-align: center;
+  margin-bottom: 1.5rem;
+}
+
+.upgrade-icon-wrap {
+  width: 56px;
+  height: 56px;
+  background: linear-gradient(135deg, #7C3AED, #A855F7);
+  border-radius: 16px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin: 0 auto 1rem;
+  box-shadow: 0 0 24px rgba(124, 58, 237, 0.4);
+}
+.upgrade-icon { color: #fff; }
+
+.upgrade-title {
+  font-size: 1.35rem;
+  font-weight: 700;
+  color: var(--text, #2D2438);
+  margin: 0 0 0.5rem;
+}
+.upgrade-reason {
+  font-size: 0.85rem;
+  color: #F59E0B;
+  background: rgba(245, 158, 11, 0.1);
+  border-radius: 8px;
+  padding: 0.4rem 0.8rem;
+  margin-bottom: 0.75rem;
+}
+.upgrade-price {
+  margin: 0;
+}
+.upgrade-amount {
+  font-size: 2rem;
+  font-weight: 800;
+  color: var(--text, #2D2438);
+}
+.upgrade-period {
+  font-size: 0.9rem;
+  color: var(--text-soft, #5D5170);
+}
+
+/* features */
+.upgrade-features {
+  list-style: none;
+  margin: 0 0 1.5rem;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.55rem;
+}
+.upgrade-features li {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  font-size: 0.875rem;
+  color: var(--text-soft, #5D5170);
+}
+.upgrade-check {
+  color: #7C3AED;
+  flex-shrink: 0;
+}
+
+/* error / success */
+.upgrade-error {
+  background: rgba(239, 68, 68, 0.1);
+  border: 1px solid rgba(239, 68, 68, 0.3);
+  color: #ef4444;
+  border-radius: 8px;
+  padding: 0.6rem 0.8rem;
+  font-size: 0.82rem;
+  margin-bottom: 1rem;
+}
+.upgrade-success {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  color: #22C55E;
+  font-size: 0.9rem;
+  font-weight: 600;
+  background: rgba(34, 197, 94, 0.1);
+  border-radius: 10px;
+  padding: 0.75rem;
+  margin-bottom: 1rem;
+}
+
+/* CTA */
+.upgrade-btn {
+  width: 100%;
+  padding: 0.875rem;
+  border-radius: 12px;
+  background: linear-gradient(135deg, #7C3AED, #A855F7);
+  color: #fff;
+  font-weight: 700;
+  font-size: 0.95rem;
+  border: none;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  transition: all 0.2s;
+  box-shadow: 0 4px 20px rgba(124, 58, 237, 0.35);
+}
+.upgrade-btn:hover:not(:disabled) {
+  transform: translateY(-1px);
+  box-shadow: 0 8px 28px rgba(124, 58, 237, 0.5);
+}
+.upgrade-btn:disabled {
+  opacity: 0.65;
+  cursor: not-allowed;
+}
+
+.upgrade-secure {
+  text-align: center;
+  font-size: 0.75rem;
+  color: var(--text-muted, #8B7F9E);
+  margin: 0.75rem 0 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.35rem;
+}
+
+/* PRO badge (already-pro view) */
+.upgrade-pro-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  background: linear-gradient(135deg, #7C3AED, #A855F7);
+  color: #fff;
+  border-radius: 20px;
+  padding: 0.3rem 0.9rem;
+  font-size: 0.8rem;
+  font-weight: 700;
+  margin-bottom: 1rem;
+}
+.upgrade-sub {
+  color: var(--text-soft, #5D5170);
+  font-size: 0.9rem;
+}
+
+/* Dark theme adjustments */
+[data-theme='dark'] .upgrade-card {
+  background: #1e1e2e;
+  border-color: rgba(124, 58, 237, 0.3);
+  box-shadow:
+    0 0 0 1px rgba(124, 58, 237, 0.15),
+    0 24px 64px rgba(0, 0, 0, 0.5),
+    0 0 80px rgba(124, 58, 237, 0.08);
+}
+[data-theme='dark'] .upgrade-close {
+  background: rgba(255,255,255,0.07);
+  border-color: rgba(255,255,255,0.1);
+  color: var(--text-muted, #888);
+}
+[data-theme='dark'] .upgrade-close:hover {
+  background: rgba(255,255,255,0.12);
+  color: var(--text, #fff);
+}
+
+/* animations */
+@keyframes fadeIn { from { opacity: 0 } to { opacity: 1 } }
+@keyframes slideUp {
+  from { opacity: 0; transform: translateY(20px) scale(0.97) }
+  to   { opacity: 1; transform: translateY(0) scale(1) }
+}
+
+.spin {
+  animation: rotate 0.7s linear infinite;
+}
+@keyframes rotate {
+  from { transform: rotate(0deg) }
+  to   { transform: rotate(360deg) }
+}

@@ -1,0 +1,30 @@
+.pp-avatar-section {
+  display: flex; justify-content: center;
+  padding: 12px 0 20px;
+}
+.pp-avatar-lg {
+  width: 88px; height: 88px;
+  display: flex; align-items: center; justify-content: center;
+  background: linear-gradient(135deg, var(--accent) 0%, var(--accent-hover) 100%);
+  color: #fff;
+  font-size: 36px; font-weight: 800;
+  border-radius: 50%;
+  box-shadow:
+    0 16px 32px rgba(184, 164, 244, 0.4),
+    inset 0 2px 0 rgba(255,255,255,0.3);
+}
+
+.pp-status-info {
+  display: flex; align-items: center; gap: 8px;
+  padding: 12px 14px;
+  background: var(--secondary-soft);
+  border-radius: var(--r-md);
+  font-size: 12px; color: var(--text-soft);
+  margin-bottom: 18px;
+  line-height: 1.5;
+}
+.pp-status-dot {
+  width: 8px; height: 8px; flex-shrink: 0;
+  background: var(--online);
+  border-radius: 50%;
+}
