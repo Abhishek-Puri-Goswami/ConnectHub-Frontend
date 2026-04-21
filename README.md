@@ -1,59 +1,51 @@
-﻿# ConnectHub â€” Claymorphism Chat Application
+# ConnectHub - Real-Time Chat Frontend
 
-A modern real-time chat app with a **claymorphism** UI design, built with React + Vite.
+## Overview
+ConnectHub is a modern, real-time chat application interface built with React and Vite. It features a sophisticated Claymorphism design system for a unique and tactile user experience.
 
 ## Design System
+- **Theme**: Claymorphism, characterized by soft shadows, rounded surfaces, inset interactive elements, and vibrant gradients.
+- **Color Palette**:
+    - Coral: `#FF8E72` (Primary actions)
+    - Mint: `#7AC9A7` (Success states)
+    - Lavender: `#B8A4F4` (Secondary elements)
+    - Cream: `#FDF6EC` (Background surfaces)
+    - Plum: `#1A1625` (Contrast surfaces)
+- **Typography**: Plus Jakarta Sans for primary interface text and JetBrains Mono for technical content.
+- **Responsiveness**: Fully responsive layout adapts to all device sizes, with a dedicated drawer-style sidebar for mobile and tablet views.
+- **Modes**: Support for light and dark modes via a system-aware `data-theme` attribute.
 
-- **Style**: Claymorphism â€” soft shadows, rounded surfaces, inset inputs, gradient badges
-- **Palette**: Coral `#FF8E72` Â· Mint `#7AC9A7` Â· Lavender `#B8A4F4` Â· Cream `#FDF6EC` Â· Plum `#1A1625`
-- **Font**: Plus Jakarta Sans (primary), JetBrains Mono (code)
-- **Dark/Light mode** with `data-theme` attribute, persisted to localStorage, respects system preference
-- **Responsive** â€” sidebar becomes slide-out drawer below 900px
+## Feature Highlights
 
-## Auth Features
+### Authentication & Identification
+- **Structured Registration**: Requirement-driven input with live validation.
+- **Multichannel Verification**: Integrated email and SMS OTP validation flows.
+- **Secure Access**: Choice of conventional credentials, OTP-based login, or OAuth2 providers (Google & GitHub).
 
-### Sign Up (Register)
-- **All fields required**: Full Name (auto-capitalized), Username (lowercase + digits + underscores only), Email, Phone (+91 India), Password, Confirm Password
-- **Email verification**: Inline "Verify" button â†’ sends OTP â†’ 6-digit input â†’ âœ“ Verified chip
-- **Phone verification**: Same flow with SMS OTP
-- **Password**: Live strength meter (5 criteria), match indicator
-- **Submit disabled** until both email and phone are verified
-
-### Login (4 methods)
-1. **Email + OTP** â€” enter email â†’ receive code â†’ auto-verify on 6th digit
-2. **Phone + OTP** â€” enter +91 number â†’ receive code â†’ auto-verify
-3. **Username/Email + Password** â€” classic login with remember-me + forgot password link
-4. **OAuth2** â€” Google and GitHub buttons
-
-### Other Auth Pages
-- **Verify Email** â€” standalone OTP page for unverified accounts
-- **Forgot Password** â€” 3-step flow: email â†’ OTP â†’ new password with strength meter
-- **OAuth2 Callback** â€” loading/error states
-
-## Chat Features
-
-- **Sidebar**: Channels + DMs list, unread badges, search, quick-create buttons, user card, theme toggle, logout
-- **Chat Area**: Message list with day separators, skeletons, scroll-to-bottom, pinned message banner, typing indicator, members panel
-- **Message Bubbles**: Own (coral gradient) vs other (white/dark surface), reply context, edit/delete, delivery ticks (sent/delivered/read)
-- **Emoji Reactions**: Inline reaction chips, emoji picker grid, optimistic updates via WebSocket
-- **Message Input**: Auto-resize textarea, file upload, quick emoji tray, keyboard hints
-- **Create Room Modal**: Group channel or DM, user search with chips
-- **Room Settings Panel**: Edit info, manage members (promote/mute/remove), media gallery, danger zone
-- **Profile Panel**: Edit name/username/bio, change password
-- **Notification Center**: Dropdown with read/unread states, mark-all-read
-- **Message Search**: Inline search bar with highlighted results
+### Messaging & Interaction
+- **Real-time Communication**: Optimistic UI updates with WebSocket integration.
+- **Rich Interaction**: Emoji reactions, message replies, and delivery status indicators (Sent, Delivered, Read).
+- **Media Management**: Support for file uploads and an integrated media gallery.
+- **Group Management**: Comprehensive room settings for managing members, roles, and privacy.
 
 ## Getting Started
 
+### Prerequisites
+- Node.js (Latest LTS recommended)
+- Connected Backend API at `http://localhost:8080/api/v1`
+
+### Installation
 ```bash
+# Install dependencies
 npm install
+
+# Start development server
 npm run dev
 ```
 
-Backend API expected at `/api/v1` (or `http://localhost:8080` in dev mode for OAuth2 + WebSocket).
-
 ## Project Evolution Track
-- [x] Initial infrastructure and config
-- [x] Static Assets and Public files
-- [x] State management and API services
-- [x] UI Components and Core Styling
+- [x] Initial Project Infrastructure and Config
+- [x] Static Assets and Public Folder Setup
+- [x] State Management (Zustand) and API Client Layer
+- [x] UI Component Library and Theme Implementation
+- [x] Real-time Integration via WebSockets
