@@ -83,7 +83,7 @@ export default function UpgradeModal({ isOpen, onClose, message }) {
   if (hasProSubscription && step !== 'success') {
     return createPortal(
       <div className="upgrade-overlay" onClick={onClose}>
-        <div className="upgrade-card" onClick={e => e.stopPropagation()}>
+        <div role="dialog" className="upgrade-card" onClick={e => e.stopPropagation()}>
           <button className="upgrade-close" onClick={onClose}><X size={18}/></button>
           <div className="upgrade-pro-badge"><Zap size={20}/> Premium</div>
           <h2 className="upgrade-title">You're already on Premium! 🎉</h2>
