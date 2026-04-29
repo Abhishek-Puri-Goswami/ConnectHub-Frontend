@@ -64,7 +64,7 @@ const FREE_FEATURES = [
   { label: 'Up to 5 group chats', variant: 'accent' },
 ]
 
-const PRO_FEATURES = [
+const PREMIUM_FEATURES = [
   { label: '30 messages/min', variant: '' },
   { label: '10GB media storage', variant: 'secondary' },
   { label: 'Unlimited groups', variant: 'accent' },
@@ -120,7 +120,7 @@ export default function BillingPage() {
       <div className={`billing-plan-card ${isProUser ? 'pro' : ''}`}>
         <div className="billing-plan-info">
           <div className="billing-plan-name">
-            {isProUser ? <><Zap size={20} /> ConnectHub PRO</> : <><Package size={20} /> Free Plan</>}
+            {isProUser ? <><Zap size={20} /> ConnectHub Premium</> : <><Package size={20} /> Free Plan</>}
             <span className={`billing-plan-badge ${isProUser ? 'pro' : 'free'}`}>
               {plan}
             </span>
@@ -130,13 +130,13 @@ export default function BillingPage() {
           </div>
           <div className="billing-plan-price">
             {isProUser
-              ? <><strong>₹199</strong>/month</>
+              ? <><strong>₹99</strong> one-time</>
               : <><strong>₹0</strong> — Free forever</>
             }
           </div>
-          {/* Feature tags — shows PRO or FREE features depending on current plan */}
+          {/* Feature tags — shows Premium or FREE features depending on current plan */}
           <div className="billing-plan-features">
-            {(isProUser ? PRO_FEATURES : FREE_FEATURES).map(f => (
+            {(isProUser ? PREMIUM_FEATURES : FREE_FEATURES).map(f => (
               <span key={f.label} className={`billing-feature-tag ${f.variant}`}>
                 <Check size={10} /> {f.label}
               </span>
@@ -156,10 +156,9 @@ export default function BillingPage() {
       {isProUser && subscription && (
         <div className="billing-details-grid">
           <div className="billing-detail-card">
-            <div className="billing-detail-label">Subscription ID</div>
-            {/* Razorpay subscription ID in monospace for readability / support tickets */}
+            <div className="billing-detail-label">Order ID</div>
             <div className="billing-detail-value" style={{ fontSize: '0.82rem', fontFamily: 'var(--font-mono)' }}>
-              {subscription.razorpaySubId || subscription.id || '—'}
+              {subscription.razorpayOrderId || subscription.id || '—'}
             </div>
           </div>
           <div className="billing-detail-card">
@@ -195,7 +194,7 @@ export default function BillingPage() {
         <div className="billing-empty">
           <div className="billing-empty-icon"><Receipt size={24} /></div>
           <h3>No payments yet</h3>
-          <p>{isProUser ? 'Your payment records will appear here' : 'Upgrade to PRO to start your billing history'}</p>
+          <p>{isProUser ? 'Your payment records will appear here' : 'Upgrade to Premium to start your billing history'}</p>
         </div>
       ) : (
         /*
@@ -221,7 +220,7 @@ export default function BillingPage() {
                     <Clock size={12} style={{ display: 'inline', verticalAlign: '-1px', marginRight: 4 }} />
                     {p.createdAt ? format(new Date(p.createdAt), 'MMM d, yyyy') : '—'}
                   </td>
-                  <td>{p.description || 'ConnectHub PRO subscription'}</td>
+                  <td>{p.description || 'ConnectHub PRO'}</td>
                   <td style={{ fontWeight: 700 }}>
                     {p.currency === 'INR' ? '₹' : (p.currency || '₹')}{(p.amount || 0) / 100}
                   </td>

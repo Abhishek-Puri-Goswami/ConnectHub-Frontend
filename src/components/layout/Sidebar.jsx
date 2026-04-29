@@ -31,6 +31,7 @@
  *   wsConnected (boolean) — used to render the green/grey dot on the user's own avatar
  */
 import { useState, useEffect } from 'react'
+import { createPortal } from 'react-dom'
 import { useNavigate } from 'react-router-dom'
 import { useAuthStore } from '../../store/authStore'
 import { useChatStore } from '../../store/chatStore'
@@ -39,7 +40,8 @@ import { api } from '../../services/api'
 import { enrichRoomMembers } from '../../utils/roomMembers'
 import {
   MessageCircle, Search, Plus, LogOut, Settings,
-  Hash, Lock, MoreHorizontal, Users, X, Zap, Shield, CreditCard
+  Hash, Lock, MoreHorizontal, Users, X, Zap, Shield, CreditCard,
+  Check, CheckCheck
 } from 'lucide-react'
 import { formatDistanceToNowStrict, isToday, isYesterday, format } from 'date-fns'
 import CreateRoomModal from '../chat/CreateRoomModal'
@@ -54,13 +56,16 @@ export default function Sidebar({ wsConnected }) {
   const { rooms, activeRoomId, setActiveRoom, unreadCounts, closeSidebar } = useChatStore()
   const { subscription, upgradeModalOpen, openUpgradeModal, closeUpgradeModal } = usePaymentStore()
   const subscriptionStatus = (subscription?.status || '').toUpperCase()
-  const hasProSubscription = subscription?.plan !== 'FREE' && !['CANCELLED', 'EXPIRED'].includes(subscriptionStatus)
+  const userRole = (user?.role || '').toUpperCase()
+  const hasProSubscription = userRole === 'ADMIN' || userRole === 'PLATFORM_ADMIN'
+    || (subscriptionStatus === 'ACTIVE' && subscription?.plan !== 'FREE')
 
   const [search, setSearch] = useState('')
   const [showCreate, setShowCreate] = useState(false)
   const [createTab, setCreateTab] = useState('dm')
   const [showProfile, setShowProfile] = useState(false)
   const [menuOpen, setMenuOpen] = useState(false)
+  const [showProBenefits, setShowProBenefits] = useState(false)
 
   /* Close the floating "more" menu when Escape is pressed */
   useEffect(() => {
@@ -118,10 +123,10 @@ export default function Sidebar({ wsConnected }) {
                 <div className="sb-menu-backdrop" onClick={() => setMenuOpen(false)} />
                 <div className="sb-menu scale-in">
                   <button onClick={() => { setShowProfile(true); setMenuOpen(false) }}>
-                    <Settings size={14}/> Profile settings
+                    <Settings size={14}/> Settings
                   </button>
-                  {/* Admin panel link is only shown to users with the ADMIN role */}
-                  {user?.role?.toUpperCase() === 'ADMIN' && (
+                  {/* Admin panel link shown to ADMIN and PLATFORM_ADMIN */}
+                  {['ADMIN', 'PLATFORM_ADMIN'].includes(user?.role?.toUpperCase()) && (
                   <button onClick={() => { navigate('/admin'); setMenuOpen(false) }}>
                     <Shield size={14}/> Admin Panel
                   </button>
@@ -214,31 +219,47 @@ export default function Sidebar({ wsConnected }) {
           </button>
         </div>
 
-        {/* Show "Upgrade to PRO" for FREE users, or a "PRO" badge for subscribers */}
+        {/* Show "Upgrade to Premium" for FREE users, or a "Premium" badge for subscribers */}
         {!hasProSubscription && (
           <button className="sb-upgrade-btn" onClick={openUpgradeModal}>
-            <Zap size={14}/> Upgrade to PRO
+            <Zap size={14}/> Upgrade to Premium
           </button>
         )}
         {hasProSubscription && (
-          <div className="sb-pro-badge">
-            <Zap size={12}/> ConnectHub PRO
-          </div>
+          <button className="sb-pro-badge" onClick={() => setShowProBenefits(true)} title="View Premium benefits">
+            <Zap size={12}/> ConnectHub Premium
+          </button>
         )}
-
-        <div className="sb-bottom-bar">
-          <button className="sb-bottom-btn" onClick={() => setShowProfile(true)}>
-            <Settings size={16}/> <span>Settings</span>
-          </button>
-          <button className="sb-bottom-btn danger" onClick={handleLogout}>
-            <LogOut size={16}/> <span>Logout</span>
-          </button>
-        </div>
       </div>
 
       {showCreate && <CreateRoomModal initialTab={createTab} onClose={() => setShowCreate(false)} />}
       {showProfile && <ProfilePanel onClose={() => setShowProfile(false)} />}
       <UpgradeModal isOpen={upgradeModalOpen} onClose={closeUpgradeModal} />
+      {showProBenefits && createPortal(
+        <div className="upgrade-overlay" onClick={() => setShowProBenefits(false)}>
+          <div className="upgrade-card" onClick={e => e.stopPropagation()} style={{ maxWidth: 420 }}>
+            <button className="upgrade-close" onClick={() => setShowProBenefits(false)}><X size={18}/></button>
+            <div className="upgrade-hero">
+              <div className="upgrade-icon-wrap"><Zap size={28} className="upgrade-icon"/></div>
+              <h2 className="upgrade-title">You're on ConnectHub Premium</h2>
+              <p className="upgrade-sub">Here's what's included in your plan:</p>
+            </div>
+            <ul className="upgrade-features">
+              {[
+                '30 messages/min (5× free limit)',
+                '10 GB media storage',
+                'Unlimited group chats',
+                '30 media uploads/min',
+                'Message history forever',
+                'Priority support',
+              ].map(f => (
+                <li key={f}><Check size={14} className="upgrade-check"/>{f}</li>
+              ))}
+            </ul>
+          </div>
+        </div>,
+        document.body
+      )}
     </>
   )
 }
@@ -256,6 +277,23 @@ export default function Sidebar({ wsConnected }) {
  *   unread — number of unread messages (shows as a red badge)
  *   onClick — called when the row is clicked
  */
+/*
+ * SidebarTick — delivery status icon for the last message in a conversation row.
+ * Only shown when the current user sent the last message.
+ */
+function SidebarTick({ status, readBy, roomMembers, userId }) {
+  const others = (roomMembers || []).filter(m => m.userId !== userId)
+  const allRead = others.length > 0 && others.every(m => (readBy || []).includes(m.userId))
+  const effective = allRead || status === 'READ' ? 'READ' : (status || 'SENT')
+
+  const style = { display: 'inline-flex', alignItems: 'center', marginRight: 3, flexShrink: 0 }
+  if (effective === 'READ')
+    return <span style={{ ...style, color: 'var(--accent)' }}><CheckCheck size={13}/></span>
+  if (effective === 'DELIVERED')
+    return <span style={{ ...style, color: 'var(--text-muted)' }}><CheckCheck size={13}/></span>
+  return <span style={{ ...style, color: 'var(--text-muted)' }}><Check size={13}/></span>
+}
+
 function ConversationRow({ room, active, unread, onClick }) {
   const { user } = useAuthStore()
   const { messages, onlineUsers, members: allMembers } = useChatStore()
@@ -305,18 +343,28 @@ function ConversationRow({ room, active, unread, onClick }) {
    */
   const roomMsgs = messages[room.roomId] || []
   const lastMsg = roomMsgs[roomMsgs.length - 1]
+  /* Use messages from store if available, fall back to lastMessagePreview stored
+   * on the room object (populated by the backend when each message is sent). */
   const preview = lastMsg
-    ? (lastMsg.type === 'IMAGE' ? '📷 Photo'
+    ? (lastMsg.isDeleted ? 'Message deleted'
+      : lastMsg.type === 'IMAGE' ? '📷 Photo'
       : lastMsg.type === 'FILE' ? '📎 File'
       : (lastMsg.content || '').replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&quot;/g, '"').replace(/&#39;/g, "'"))
-    : (isDM ? 'Start a conversation' : (room.description || (room.isPrivate ? 'Private channel' : 'Public channel')))
+    : room.lastMessagePreview
+      || (unread > 0 ? 'New message' : (isDM ? 'Start a conversation' : (room.description || (room.isPrivate ? 'Private channel' : 'Public channel'))))
 
   /* Build the relative time label from the last message or room's lastMessageAt */
   const ts = lastMsg?.sentAt || lastMsg?.timestamp || room.lastMessageAt
-  const timeLabel = ts ? formatRelative(new Date(ts)) : ''
+  const parseTs = (s) => typeof s === 'number' ? new Date(s)
+    : new Date(s.endsWith('Z') || s.includes('+') ? s : s + 'Z')
+  const timeLabel = ts ? formatRelative(parseTs(ts)) : ''
 
   /* For DMs, show an online dot if the other user is currently online */
   const isOtherOnline = isDM && dmOtherId && onlineUsers.has(dmOtherId)
+
+  /* Delivery ticks — only for our own last message */
+  const isOwnLastMsg = lastMsg && lastMsg.senderId === user?.userId
+  const roomMembers = cachedMembers || []
 
   /* Deterministic color from room name — same room always gets same color */
   const colorPalette = ['#FF8E72','#7AC9A7','#B8A4F4','#FFB547','#6BCEEA','#F47174']
@@ -345,7 +393,9 @@ function ConversationRow({ room, active, unread, onClick }) {
           {timeLabel && <span className="sb-row-time">{timeLabel}</span>}
         </div>
         <div className="sb-row-bottom">
-          <span className="sb-row-preview">{preview}</span>
+          <span className="sb-row-preview">
+            <span className="sb-row-preview-text">{preview}</span>
+          </span>
           {unread > 0 && <span className="sb-row-badge">{unread > 99 ? '99+' : unread}</span>}
         </div>
       </div>

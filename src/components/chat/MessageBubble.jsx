@@ -52,7 +52,7 @@ import { useAuthStore } from '../../store/authStore'
 import { useChatStore } from '../../store/chatStore'
 import {
   Reply, Edit3, Trash2, Smile, Check, CheckCheck,
-  MoreHorizontal, Pin, X
+  MoreHorizontal, Pin, X, Info
 } from 'lucide-react'
 import EmojiReactions from './EmojiReactions'
 import './MessageBubble.css'
@@ -115,13 +115,14 @@ function StatusTicks({ message, isOwn, roomMembers, userId }) {
 
 export default function MessageBubble({
   message, roomId, isOwn, showAvatar,
-  onReply, onEdit, onDelete, highlight
+  onReply, onEdit, onDelete, onDeleteForMe, onInfo, highlight
 }) {
   const [hov, setHov] = useState(false)
   const [editing, setEditing] = useState(false)
   const [editText, setEditText] = useState(message.content || '')
   const [showEmojiPicker, setShowEmojiPicker] = useState(false)
   const [showMenu, setShowMenu] = useState(false)
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
   const inputRef = useRef(null)
 
   const { user } = useAuthStore()
@@ -129,8 +130,12 @@ export default function MessageBubble({
   const reactions = messageReactions[message.messageId] || []
   const roomMembers = members[roomId || activeRoomId] || []
 
-  /* Format the sent time as "10:34 AM" shown under the bubble */
-  const time = message.sentAt ? format(new Date(message.sentAt), 'h:mm a')
+  /* Format the sent time as "10:34 AM" shown under the bubble.
+   * sentAt from the backend is a bare LocalDateTime string (no Z/offset), so the
+   * browser would parse it as local time instead of UTC. Appending Z forces UTC
+   * parsing; date-fns then formats it in the user's local timezone. */
+  const parseTs = (s) => new Date(s.endsWith('Z') || s.includes('+') ? s : s + 'Z')
+  const time = message.sentAt ? format(parseTs(message.sentAt), 'h:mm a')
     : message.timestamp ? format(new Date(message.timestamp), 'h:mm a')
     : ''
 
@@ -191,7 +196,7 @@ export default function MessageBubble({
     <div
       className={`mb-row ${isOwn ? 'own' : 'other'} ${showAvatar ? 'with-av' : ''} ${highlight ? 'hi' : ''}`}
       onMouseEnter={() => setHov(true)}
-      onMouseLeave={() => { setHov(false); setShowMenu(false) }}
+      onMouseLeave={() => { setHov(false); setShowMenu(false); setShowDeleteConfirm(false) }}
     >
       {/* Avatar column — only shows avatar on the first message of a cluster */}
       <div className="mb-av-col">
@@ -220,7 +225,12 @@ export default function MessageBubble({
 
         {/* Message bubble + hover options */}
         <div className="mb-bubble-row">
-          {editing ? (
+          {message.isDeleted ? (
+            /* Deleted message — show placeholder; no editing or options available */
+            <div className={`mb-bubble mb-bubble-deleted ${isOwn ? 'own' : 'other'}`}>
+              <span className="mb-deleted-text">This message was deleted</span>
+            </div>
+          ) : editing ? (
             /* Inline edit mode: input replaces the bubble */
             <div className="mb-edit-box">
               <input
@@ -271,10 +281,10 @@ export default function MessageBubble({
             </div>
           )}
 
-          {/* Hover options — three-dot button appears on hover, opens a dropdown on click */}
-          {(hov || showMenu) && !editing && (
+          {/* Hover options — hidden for deleted messages */}
+          {!editing && !message.isDeleted && (
             <div className="mb-opts">
-              {!showMenu ? (
+              {!showMenu && !showDeleteConfirm ? (
                 <button
                   className="mb-opt-trigger"
                   onClick={() => setShowMenu(true)}
@@ -282,6 +292,26 @@ export default function MessageBubble({
                 >
                   <MoreHorizontal size={15}/>
                 </button>
+              ) : showDeleteConfirm ? (
+                /* Delete scope confirmation */
+                <div className={`mb-dropdown mb-delete-confirm scale-in ${isOwn ? 'own' : 'other'}`}>
+                  <div className="mb-delete-confirm-title">Delete message?</div>
+                  <button onClick={() => {
+                    onDeleteForMe()
+                    setShowDeleteConfirm(false)
+                  }}>
+                    Delete for me
+                  </button>
+                  <button className="danger" onClick={() => {
+                    onDelete()
+                    setShowDeleteConfirm(false)
+                  }}>
+                    Delete for everyone
+                  </button>
+                  <button className="mb-delete-cancel" onClick={() => setShowDeleteConfirm(false)}>
+                    Cancel
+                  </button>
+                </div>
               ) : (
                 <div className={`mb-dropdown scale-in ${isOwn ? 'own' : 'other'}`}>
                   <button onClick={() => { setShowEmojiPicker(!showEmojiPicker); setShowMenu(false) }}>
@@ -299,10 +329,15 @@ export default function MessageBubble({
                       <Edit3 size={14}/> Edit
                     </button>
                   )}
+                  {isOwn && onInfo && (
+                    <button onClick={() => { onInfo(); setShowMenu(false) }}>
+                      <Info size={14}/> Info
+                    </button>
+                  )}
                   {isOwn && (
                     <button
                       className="danger"
-                      onClick={() => { onDelete(); setShowMenu(false) }}
+                      onClick={() => { setShowDeleteConfirm(true); setShowMenu(false) }}
                     >
                       <Trash2 size={14}/> Delete
                     </button>
@@ -317,11 +352,13 @@ export default function MessageBubble({
         {!editing && (
           <div className="mb-meta">
             <span className="mb-time">{time}</span>
-            {message.isEdited && <span className="mb-edited">· edited</span>}
-            <StatusTicks
-              message={message} isOwn={isOwn}
-              roomMembers={roomMembers} userId={user?.userId}
-            />
+            {!message.isDeleted && message.isEdited && <span className="mb-edited">· edited</span>}
+            {!message.isDeleted && (
+              <StatusTicks
+                message={message} isOwn={isOwn}
+                roomMembers={roomMembers} userId={user?.userId}
+              />
+            )}
           </div>
         )}
 

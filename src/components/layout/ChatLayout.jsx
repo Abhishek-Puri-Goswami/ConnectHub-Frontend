@@ -82,23 +82,36 @@ export default function ChatLayout() {
      * Load the initial room list from the room-service.
      * Sorts rooms by lastMessageAt so the most recently active room appears first.
      */
-    api.getUserRooms(user.userId)
-      .then(rooms => setRooms(rooms.sort((a, b) =>
+    Promise.all([
+      api.getUserRooms(user.userId),
+      api.getWsUnreadCounts(user.userId).catch(() => ({})),
+    ]).then(([rooms, counts]) => {
+      const sorted = rooms.sort((a, b) =>
         new Date(b.lastMessageAt || 0) - new Date(a.lastMessageAt || 0)
-      )))
-      .catch(console.error)
-
-    /*
-     * Load per-room unread counts from the WebSocket service's Redis store.
-     * These counts were tracked even while the user was offline, so the sidebar
-     * immediately shows the correct unread badges without waiting for WebSocket events.
-     */
-    api.getWsUnreadCounts(user.userId)
-      .then(counts => {
-        const state = useChatStore.getState()
-        state.setUnreadCounts(counts)
+      )
+      setRooms(sorted)
+      const state = useChatStore.getState()
+      state.setUnreadCounts(counts)
+      // The backend's async Feign call to update lastMessagePreview can fail silently,
+      // leaving it null even for rooms that have messages. For any room that has ever
+      // had a message (lastMessageAt is set) but no stored preview, fetch the last
+      // message so the sidebar always shows real content regardless of read/unread state.
+      sorted.forEach(room => {
+        if (room.lastMessageAt && !room.lastMessagePreview) {
+          api.getMessages(room.roomId, null, 1)
+            .then(data => {
+              const list = data.content || data
+              const msg = Array.isArray(list) ? list[0] : null
+              if (!msg || msg.isDeleted) return
+              const preview = msg.type === 'IMAGE' ? '📷 Photo'
+                : msg.type === 'FILE' ? '📎 File'
+                : (msg.content || '').replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&quot;/g, '"').replace(/&#39;/g, "'")
+              if (preview) state.updateRoomPreview(room.roomId, preview, msg.senderId)
+            })
+            .catch(() => {})
+        }
       })
-      .catch(console.error)
+    }).catch(console.error)
 
     /*
      * Subscribe to global presence events.
@@ -119,6 +132,10 @@ export default function ChatLayout() {
      */
     ws.subscribeToPersonal(user.userId, (msg) => {
       const state = useChatStore.getState()
+      if (msg.type === 'delivery-ack') {
+        state.updateDeliveryStatus(msg.roomId, msg.messageId, msg.status)
+        return
+      }
       state.addMessage(msg.roomId, msg)
       const roomExists = state.rooms.find(r => r.roomId === msg.roomId)
       if (!roomExists) {
@@ -140,11 +157,19 @@ export default function ChatLayout() {
      *   ROOM_CREATED — reloads the room list so the new room appears in the sidebar immediately.
      */
     ws.subscribeToNotifications(user.userId, (notif) => {
-      console.log('[Notification]', notif)
+      if (notif.type === 'ACCOUNT_SUSPENDED') {
+        // Admin suspended this user — update local state so ProtectedRoute shows SuspendedPage
+        useAuthStore.getState().updateUser({ active: false })
+        return
+      }
       if (notif.type === 'NEW_MESSAGE' && notif.roomId) {
         const state = useChatStore.getState()
         if (state.activeRoomId !== notif.roomId || document.hidden) {
           state.incrementUnread(notif.roomId)
+        }
+        // Keep sidebar preview current even for rooms not yet opened this session
+        if (notif.message) {
+          state.updateRoomPreview(notif.roomId, notif.message, notif.actorId)
         }
       } else if (notif.type === 'ROOM_CREATED') {
         const state = useChatStore.getState()

@@ -38,7 +38,7 @@ import MessageInput from './MessageInput'
 import TypingIndicator from './TypingIndicator'
 import MessageSearch from './MessageSearch'
 import RoomSettingsPanel from './RoomSettingsPanel'
-
+import MessageInfoPanel from './MessageInfoPanel'
 import MediaGallery from './MediaGallery'
 import { enrichRoomMembers, getMemberDisplay } from '../../utils/roomMembers'
 import {
@@ -81,7 +81,7 @@ export default function ChatArea({ wsConnected }) {
   const { user } = useAuthStore()
   const {
     activeRoomId, rooms, messages, setMessages, addMessage, prependMessages,
-    editMessage, deleteMessage, setTyping, clearTyping, setMembers, members,
+    editMessage, deleteMessage, deleteMessageForMe, setTyping, clearTyping, setMembers, members,
     incrementUnread, clearUnread, toggleSidebar, typingUsers, applyReactionEvent,
     onlineUsers, markMessagesRead, updateDeliveryStatus,
   } = useChatStore()
@@ -125,6 +125,7 @@ export default function ChatArea({ wsConnected }) {
   const [pinnedMsg, setPinnedMsg] = useState(null)
   const [toast, setToast] = useState(null)
   const [showMediaGallery, setShowMediaGallery] = useState(false)
+  const [infoMessage, setInfoMessage] = useState(null)
 
   /* showToast — shows a temporary status message at the top of the chat area for 2.5 seconds */
   const showToast = (msg, kind = 'ok') => {
@@ -141,7 +142,7 @@ export default function ChatArea({ wsConnected }) {
     const handler = (e) => {
       if (e.key === 'Escape') {
         setReplyTo(null); setShowSearch(false); setShowRoomSettings(false)
-        setShowInfoPanel(false)
+        setShowInfoPanel(false); setInfoMessage(null)
       }
       if ((e.ctrlKey || e.metaKey) && e.key === 'f') {
         e.preventDefault(); setShowSearch(s => !s)
@@ -176,12 +177,15 @@ export default function ChatArea({ wsConnected }) {
       const pinned = arr.find(m => m.isPinned)
       if (pinned) setPinnedMsg(pinned)
       setTimeout(() => scrollToBottom('auto'), 50)
-      if (arr.length > 0) {
-        const lastMsg = arr[arr.length - 1]
-        if (lastMsg.messageId && lastMsg.senderId !== user?.userId) {
-          ws.sendReadReceipt(activeRoomId, lastMsg.messageId)
-        }
+      // Find the last message from someone else and send a read receipt for it.
+      // Using the last other-user message (not just the absolute last) ensures the
+      // receipt is sent even when the current user's own message is the newest.
+      const lastOtherMsg = [...arr].reverse().find(m => m.senderId !== user?.userId)
+      if (lastOtherMsg?.messageId) {
+        ws.sendReadReceipt(activeRoomId, lastOtherMsg.messageId)
       }
+      // Reset Redis counter via REST — reliable regardless of WS connection state.
+      api.resetWsUnreadCount(user?.userId, activeRoomId).catch(() => {})
       api.markRoomRead(activeRoomId, user?.userId).catch(() => {})
     }).catch(console.error).finally(() => setLoading(false))
     clearUnread(activeRoomId)
@@ -306,13 +310,18 @@ export default function ChatArea({ wsConnected }) {
     } catch (e) { console.error('Edit failed:', e); showToast('Edit failed', 'err') }
   }
 
-  /* handleDelete — deletes a message via REST + broadcasts via WebSocket */
-  const handleDelete = async (msg) => {
+  /* handleDeleteForEveryone — soft-deletes on backend + broadcasts via WebSocket so all clients show the placeholder */
+  const handleDeleteForEveryone = async (msg) => {
     try {
       await api.deleteMessage(msg.messageId)
       ws.sendDelete(activeRoomId, msg.messageId)
       showToast('Message deleted')
     } catch (e) { console.error('Delete failed:', e); showToast('Delete failed', 'err') }
+  }
+
+  /* handleDeleteForMe — removes message only from local store (session-only, no broadcast) */
+  const handleDeleteForMe = (msg) => {
+    deleteMessageForMe(activeRoomId, msg.messageId)
   }
 
   /*
@@ -463,7 +472,9 @@ export default function ChatArea({ wsConnected }) {
                     showAvatar={item.showAvatar}
                     onReply={() => setReplyTo(item.msg)}
                     onEdit={(content) => handleEdit(item.msg, content)}
-                    onDelete={() => handleDelete(item.msg)}
+                    onDelete={() => handleDeleteForEveryone(item.msg)}
+                    onDeleteForMe={() => handleDeleteForMe(item.msg)}
+                    onInfo={() => setInfoMessage(item.msg)}
                   />
                 )
               })
@@ -474,7 +485,10 @@ export default function ChatArea({ wsConnected }) {
 
           {/* Typing indicator shown below the message list */}
           {typingEntries.length > 0 && (
-            <TypingIndicator users={typingEntries.map(([, v]) => v.username)} />
+            <TypingIndicator users={typingEntries.map(([id, v]) => {
+              const m = roomMembers.find(rm => String(rm.userId) === String(id))
+              return m?.fullName || m?.username || v.username
+            })} />
           )}
 
           {/* Jump-to-bottom button — visible when scrolled up */}
@@ -614,6 +628,14 @@ export default function ChatArea({ wsConnected }) {
 
       {showRoomSettings && <RoomSettingsPanel roomId={activeRoomId} onClose={() => setShowRoomSettings(false)} />}
       {showMediaGallery && <MediaGallery roomId={activeRoomId} onClose={() => setShowMediaGallery(false)} />}
+      {infoMessage && (
+        <MessageInfoPanel
+          message={infoMessage}
+          roomType={room?.type}
+          roomMembers={roomMembers.filter(m => m.userId !== user?.userId)}
+          onClose={() => setInfoMessage(null)}
+        />
+      )}
     </div>
   )
 }
