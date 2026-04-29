@@ -107,7 +107,7 @@ export default function CreateRoomModal({ onClose, initialTab = 'group' }) {
     /* Overlay backdrop — clicking outside the card closes the modal */
     <div className="modal-overlay fade-in" onClick={onClose}>
       {/* stopPropagation prevents clicks inside the card from closing it */}
-      <div className="modal-card clay-lg scale-in" onClick={e => e.stopPropagation()}>
+      <div role="dialog" className="modal-card clay-lg scale-in" onClick={e => e.stopPropagation()}>
         <div className="modal-head">
           <div className="modal-head-icon">
             {tab === 'dm' ? <MessageCircle size={18}/> : <Users size={18}/>}

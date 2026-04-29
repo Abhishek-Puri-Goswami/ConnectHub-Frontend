@@ -130,8 +130,8 @@ export default function AdminDashboard() {
       valA = (a.role || '').toUpperCase()
       valB = (b.role || '').toUpperCase()
     } else if (sortField === 'status') {
-      valA = a.active === false ? 'SUSPENDED' : 'ACTIVE'
-      valB = b.active === false ? 'SUSPENDED' : 'ACTIVE'
+      valA = (a.active === false || (a.status || '').toUpperCase() === 'SUSPENDED' || (a.accountStatus || '').toUpperCase() === 'SUSPENDED') ? 'SUSPENDED' : 'ACTIVE'
+      valB = (b.active === false || (b.status || '').toUpperCase() === 'SUSPENDED' || (b.accountStatus || '').toUpperCase() === 'SUSPENDED') ? 'SUSPENDED' : 'ACTIVE'
     } else {
       valA = a.createdAt ? new Date(a.createdAt).getTime() : 0
       valB = b.createdAt ? new Date(b.createdAt).getTime() : 0
@@ -166,8 +166,8 @@ export default function AdminDashboard() {
 
   const stats = {
     total: users.length,
-    active: users.filter(u => u.active !== false).length,
-    suspended: users.filter(u => u.active === false).length,
+    active: users.filter(u => u.active !== false && (u.status || '').toUpperCase() !== 'SUSPENDED' && (u.accountStatus || '').toUpperCase() !== 'SUSPENDED').length,
+    suspended: users.filter(u => u.active === false || (u.status || '').toUpperCase() === 'SUSPENDED' || (u.accountStatus || '').toUpperCase() === 'SUSPENDED').length,
     admins: users.filter(u => ['ADMIN', 'PLATFORM_ADMIN'].includes((u.role || '').toUpperCase())).length,
     pro: users.filter(u => (u.subscriptionTier || 'FREE').toUpperCase() !== 'FREE').length,
   }
@@ -337,7 +337,10 @@ export default function AdminDashboard() {
                 <tbody>
                   {paginatedUsers.map(u => {
                     const uid = u.userId || u.id
-                    const status = u.active === false ? 'SUSPENDED' : 'ACTIVE'
+                    const isSuspended = u.active === false
+                      || (u.status || '').toUpperCase() === 'SUSPENDED'
+                      || (u.accountStatus || '').toUpperCase() === 'SUSPENDED'
+                    const status = isSuspended ? 'SUSPENDED' : 'ACTIVE'
                     const role = (u.role || 'USER').toUpperCase()
                     const tier = (u.subscriptionTier || 'FREE').toUpperCase()
                     const isPro = tier !== 'FREE'
@@ -427,9 +430,8 @@ export default function AdminDashboard() {
                             </div>
                           )}
                           {isCurrentUser && <span style={{ fontSize: '0.76rem', color: 'var(--text-muted)' }}>You</span>}
-                          {isPlatformAdmin && !isCurrentUser && <span style={{ fontSize: '0.76rem', color: 'var(--accent)' }}>Protected</span>}
-                          {!isCurrentUser && !isPlatformAdmin && isAdmin && !viewerIsPlatformAdmin && (
-                            <span style={{ fontSize: '0.76rem', color: 'var(--text-muted)' }}>Admin</span>
+                          {!isCurrentUser && isAdmin && !viewerIsPlatformAdmin && (
+                            <span style={{ fontSize: '0.76rem', color: 'var(--accent)' }}>Protected</span>
                           )}
                         </td>
                       </tr>

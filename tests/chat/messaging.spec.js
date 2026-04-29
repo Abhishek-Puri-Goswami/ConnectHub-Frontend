@@ -27,11 +27,11 @@ test.describe('Chat Messaging', () => {
     await mockChatApis(page, { rooms: [MOCK_ROOM] })
 
     // Default messages route for the active room
-    await page.route(`**/api/v1/messages?roomId=${MOCK_ROOM.id}*`, (route) => {
-      route.fulfill({ json: { success: true, data: [MOCK_MESSAGE] } })
+    await page.route(`**/api/v1/messages/room/${MOCK_ROOM.id}*`, (route) => {
+      route.fulfill({ json: [MOCK_MESSAGE] })
     })
     await page.route(`**/api/v1/messages*`, (route) => {
-      route.fulfill({ json: { success: true, data: [MOCK_MESSAGE] } })
+      route.fulfill({ json: [MOCK_MESSAGE] })
     })
 
     await page.goto('/chat')
@@ -76,7 +76,7 @@ test.describe('Chat Messaging', () => {
 
     await page.route('**/api/v1/messages', (route) => {
       if (route.request().method() === 'POST') {
-        route.fulfill({ json: { success: true, data: { ...MOCK_MESSAGE, content: 'Test message' } } })
+        route.fulfill({ json: { ...MOCK_MESSAGE, content: 'Test message' } })
       } else {
         route.continue()
       }
@@ -118,10 +118,7 @@ test.describe('Chat Messaging', () => {
     // Mock two messages on different days
     await page.route(`**/api/v1/messages*`, (route) => {
       route.fulfill({
-        json: {
-          success: true,
-          data: [OLDER_MESSAGE, MOCK_MESSAGE],
-        },
+        json: [OLDER_MESSAGE, MOCK_MESSAGE],
       })
     })
 
@@ -174,9 +171,9 @@ test.describe('Chat Messaging', () => {
 
       if (before) {
         loadedOlder = true
-        route.fulfill({ json: { success: true, data: [OLDER_MESSAGE] } })
+        route.fulfill({ json: [OLDER_MESSAGE] })
       } else {
-        route.fulfill({ json: { success: true, data: [MOCK_MESSAGE] } })
+        route.fulfill({ json: [MOCK_MESSAGE] })
       }
     })
 

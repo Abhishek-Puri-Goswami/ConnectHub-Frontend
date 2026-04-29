@@ -89,7 +89,7 @@ export default function RegisterPage() {
     fullName: validateFullName(form.fullName),
     username: validateUsername(form.username),
     email: validateEmail(form.email),
-    phoneNumber: validatePhone(form.phoneNumber),
+    phoneNumber: form.phoneNumber ? validatePhone(form.phoneNumber) : null,
     password: !isPasswordValid(form.password) ? 'Password must meet all requirements' : null,
     confirmPassword:
       form.confirmPassword !== form.password ? 'Passwords do not match' :
@@ -134,7 +134,7 @@ export default function RegisterPage() {
         fullName: form.fullName.trim(),
         username: form.username,
         email: form.email.trim(),
-        phoneNumber: '+91' + form.phoneNumber,
+        phoneNumber: form.phoneNumber ? '+91' + form.phoneNumber : undefined,
         password: form.password,
       })
       navigate('/verify-email', { state: { email: form.email.trim() } })
