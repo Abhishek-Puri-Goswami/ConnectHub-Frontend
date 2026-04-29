@@ -71,9 +71,14 @@ export const useChatStore = create((set, get) => ({
       (m.messageId && m.messageId === msg.messageId) ||
       (!m.messageId && m.timestamp === msg.timestamp && m.senderId === msg.senderId)
     )) return s
+    const preview = msg.type === 'IMAGE' ? '📷 Photo'
+      : msg.type === 'FILE' ? '📎 File'
+      : (msg.content || '').replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&quot;/g, '"').replace(/&#39;/g, "'").substring(0, 200)
     return {
       messages: { ...s.messages, [roomId]: [...existing, msg] },
-      rooms: s.rooms.map(r => r.roomId === roomId ? { ...r, lastMessageAt: new Date().toISOString() } : r)
+      rooms: s.rooms.map(r => r.roomId === roomId
+        ? { ...r, lastMessageAt: new Date().toISOString(), lastMessagePreview: preview, lastMessageSenderId: msg.senderId }
+        : r)
         .sort((a, b) => new Date(b.lastMessageAt || 0) - new Date(a.lastMessageAt || 0))
     }
   }),
@@ -98,11 +103,36 @@ export const useChatStore = create((set, get) => ({
   })),
 
   /*
-   * deleteMessage(roomId, msgId) — removes a message from local state.
-   * Called when a delete event arrives from the WebSocket.
+   * deleteMessage(roomId, msgId) — marks a message as deleted for everyone.
+   * Clears content so other users see "This message was deleted" placeholder.
+   * Called when a delete WebSocket event arrives from any room member.
    */
   deleteMessage: (roomId, msgId) => set(s => ({
+    messages: { ...s.messages, [roomId]: (s.messages[roomId] || []).map(m =>
+      m.messageId === msgId
+        ? { ...m, isDeleted: true, content: null, mediaUrl: null, thumbnailUrl: null }
+        : m
+    )}
+  })),
+
+  /*
+   * deleteMessageForMe(roomId, msgId) — removes a message only from local state.
+   * "Delete for me" — session-local; the message reappears on next reload.
+   */
+  deleteMessageForMe: (roomId, msgId) => set(s => ({
     messages: { ...s.messages, [roomId]: (s.messages[roomId] || []).filter(m => m.messageId !== msgId) }
+  })),
+
+  /*
+   * updateRoomPreview(roomId, preview, senderId) — updates a room's last-message
+   * preview text without touching the messages array.
+   * Called when a NEW_MESSAGE notification arrives so the sidebar stays current
+   * even for rooms that haven't been opened this session.
+   */
+  updateRoomPreview: (roomId, preview, senderId) => set(s => ({
+    rooms: s.rooms.map(r => r.roomId === roomId
+      ? { ...r, lastMessagePreview: preview, ...(senderId != null ? { lastMessageSenderId: senderId } : {}) }
+      : r)
   })),
 
   /*
@@ -201,16 +231,19 @@ export const useChatStore = create((set, get) => ({
   markMessagesRead: (roomId, readerId, upToMessageId) => set(s => {
     const msgs = s.messages[roomId]
     if (!msgs) return s
-    let found = false
+    const now = new Date().toISOString()
+    let pastTarget = false
     const updated = msgs.map(m => {
-      if (m.messageId === upToMessageId) found = true
-      if (found || m.messageId === upToMessageId) {
-      }
+      if (pastTarget) return m
       const readBy = m.readBy || []
+      let result = m
       if (!readBy.includes(readerId) && m.senderId !== readerId) {
-        return { ...m, readBy: [...readBy, readerId], deliveryStatus: 'READ' }
+        const readReceipts = { ...(m.readReceipts || {}) }
+        if (!readReceipts[readerId]) readReceipts[readerId] = now
+        result = { ...m, readBy: [...readBy, readerId], deliveryStatus: 'READ', readReceipts }
       }
-      return m
+      if (m.messageId === upToMessageId) pastTarget = true
+      return result
     })
     return { messages: { ...s.messages, [roomId]: updated } }
   }),
@@ -223,11 +256,20 @@ export const useChatStore = create((set, get) => ({
   updateDeliveryStatus: (roomId, messageId, status, readerId) => set(s => {
     const msgs = s.messages[roomId]
     if (!msgs) return s
+    const now = new Date().toISOString()
     const updated = msgs.map(m => {
       if (m.messageId === messageId) {
         const readBy = [...(m.readBy || [])]
         if (readerId && !readBy.includes(readerId)) readBy.push(readerId)
-        return { ...m, deliveryStatus: status, readBy }
+        const readReceipts = { ...(m.readReceipts || {}) }
+        if (readerId && status === 'READ' && !readReceipts[readerId]) readReceipts[readerId] = now
+        return {
+          ...m,
+          deliveryStatus: status,
+          readBy,
+          readReceipts,
+          ...(status === 'DELIVERED' && !m.deliveredAt ? { deliveredAt: now } : {}),
+        }
       }
       return m
     })

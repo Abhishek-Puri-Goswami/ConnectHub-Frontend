@@ -215,10 +215,10 @@ class WebSocketService {
   /*
    * subscribeToPersonal(userId, callback) — subscribes to messages meant only for this user.
    *
-   * Two personal queues are subscribed:
-   * 1. /user/{id}/queue/messages — delivery confirmations or special server-initiated messages
-   * 2. /user/{id}/queue/errors   — server-side error events. Currently handles LIMIT_EXCEEDED,
-   *    which fires a "guestLimitExceeded" window event to trigger the upgrade modal.
+   * Three personal queues are subscribed:
+   * 1. /user/{id}/queue/messages      — messages routed directly to this user
+   * 2. /user/{id}/queue/errors        — server-side error events (LIMIT_EXCEEDED → upgrade modal)
+   * 3. /user/{id}/queue/delivery-ack  — DELIVERED acks sent when an online recipient receives a message
    */
   subscribeToPersonal(userId, callback) {
     this.personalCallbacks.set(userId, callback)
@@ -235,6 +235,9 @@ class WebSocketService {
             window.dispatchEvent(new CustomEvent('guestLimitExceeded', { detail: err }))
           }
         } catch(e) {}
+      }))
+      subs.push(this.client.subscribe("/user/" + userId + "/queue/delivery-ack", (msg) => {
+        try { callback({ type: 'delivery-ack', ...JSON.parse(msg.body) }) } catch(e) {}
       }))
       this.personalSubscriptions.set(userId, subs)
     }
@@ -390,6 +393,9 @@ class WebSocketService {
             window.dispatchEvent(new CustomEvent('guestLimitExceeded', { detail: err }))
           }
         } catch(e) {}
+      }))
+      subs.push(this.client.subscribe("/user/" + userId + "/queue/delivery-ack", (msg) => {
+        try { callback({ type: 'delivery-ack', ...JSON.parse(msg.body) }) } catch(e) {}
       }))
       this.personalSubscriptions.set(userId, subs)
     }
