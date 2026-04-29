@@ -35,6 +35,7 @@ import RegisterPage from './components/auth/RegisterPage'
 import VerifyEmailPage from './components/auth/VerifyEmailPage'
 import ForgotPasswordPage from './components/auth/ForgotPasswordPage'
 import OAuth2CallbackPage from './components/auth/OAuth2CallbackPage'
+import SuspendedPage from './components/auth/SuspendedPage'
 import ChatLayout from './components/layout/ChatLayout'
 import AdminDashboard from './components/admin/AdminDashboard'
 import BillingPage from './components/billing/BillingPage'
@@ -47,8 +48,10 @@ import ToastContainer from './components/layout/ToastContainer'
  * history entry so pressing Back does not return to the protected page.
  */
 function ProtectedRoute({ children }) {
-  const token = useAuthStore((s) => s.token)
-  return token ? children : <Navigate to="/login" replace />
+  const { token, user } = useAuthStore()
+  if (!token) return <Navigate to="/login" replace />
+  if (user?.active === false) return <SuspendedPage />
+  return children
 }
 
 /*

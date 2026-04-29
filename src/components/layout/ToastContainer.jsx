@@ -9,18 +9,10 @@ const TOAST_ICONS = {
   info: Info,
 };
 
-const TOAST_PREFIX = {
-  success: 'Success',
-  danger: 'Danger',
-  warning: 'Warning',
-  info: 'Info'
-};
-
 function Toast({ toast }) {
   const { id, message, variant } = toast;
   const removeToast = useToastStore((state) => state.removeToast);
   const Icon = TOAST_ICONS[variant] || Info;
-  const prefix = TOAST_PREFIX[variant] || 'Info';
 
   return (
     <div className={`toast toast-${variant}`}>
@@ -28,7 +20,7 @@ function Toast({ toast }) {
         <Icon size={20} strokeWidth={2.5} />
       </div>
       <div className="toast-content">
-        <strong>{prefix}:</strong> {message}
+        {message}
       </div>
       <button className="toast-close" onClick={() => removeToast(id)}>
         <X size={16} strokeWidth={3} />
