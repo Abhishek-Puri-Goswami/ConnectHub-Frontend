@@ -3,7 +3,7 @@
  *
  * Purpose:
  *   Collects the five fields needed to create a ConnectHub account:
- *   full name, username, email, optional phone number, and password.
+ *   full name, username, email, phone number, and password.
  *   On successful submission the backend saves the user (with emailVerified=false)
  *   and sends a 6-digit OTP to the email address. The page then redirects to
  *   /verify-email so the user can confirm their inbox.
@@ -82,14 +82,14 @@ export default function RegisterPage() {
   /*
    * errs — computed validation errors for each field.
    * Each validator returns null if the value is valid or an error string if not.
-   * Phone is optional — we only validate it if the user has typed something.
+  * Phone is required and validated as the user types.
    * Password validation uses isPasswordValid() which checks all five password rules.
    */
   const errs = useMemo(() => ({
     fullName: validateFullName(form.fullName),
     username: validateUsername(form.username),
     email: validateEmail(form.email),
-    phoneNumber: form.phoneNumber ? validatePhone(form.phoneNumber) : null,
+    phoneNumber: validatePhone(form.phoneNumber),
     password: !isPasswordValid(form.password) ? 'Password must meet all requirements' : null,
     confirmPassword:
       form.confirmPassword !== form.password ? 'Passwords do not match' :
@@ -120,7 +120,7 @@ export default function RegisterPage() {
    * handleSubmit — registers the user with the backend.
    * First marks all fields as touched so any remaining errors become visible.
    * Then calls the register API with the cleaned form values.
-   * Phone is only included if provided, with +91 prefix for India.
+  * Phone is required and sent with +91 prefix for India.
    * On success, navigates to /verify-email with the email in router state.
    * On failure, shows a specific message for duplicate email/username.
    */
@@ -134,7 +134,7 @@ export default function RegisterPage() {
         fullName: form.fullName.trim(),
         username: form.username,
         email: form.email.trim(),
-        phoneNumber: form.phoneNumber ? '+91' + form.phoneNumber : undefined,
+        phoneNumber: '+91' + form.phoneNumber,
         password: form.password,
       })
       navigate('/verify-email', { state: { email: form.email.trim() } })
@@ -142,6 +142,8 @@ export default function RegisterPage() {
       const msg = err.message || 'Registration failed'
       if (msg.toLowerCase().includes('email already')) {
         setError('This email is already registered. Try signing in.')
+      } else if (msg.toLowerCase().includes('phone number already')) {
+        setError('This phone number is already registered. Try another number.')
       } else if (msg.toLowerCase().includes('username already')) {
         setError('This username is taken. Please choose another.')
       } else {
@@ -213,12 +215,11 @@ export default function RegisterPage() {
           {showErr('email') && <p className="field-hint err"><X size={12}/> {errs.email}</p>}
         </div>
 
-        {/* Phone — optional field. The +91 prefix is shown as a static label */}
+        {/* Phone — required field. The +91 prefix is shown as a static label */}
         <div className="form-group">
           <label className="form-label">
             <Phone size={13} style={{ display: 'inline', verticalAlign: '-2px', marginRight: 4, color: 'var(--primary)' }}/>
-            Phone (India)
-            <span style={{ marginLeft: 6, fontSize: 11, color: 'var(--text-muted)', fontWeight: 400 }}>optional</span>
+            Phone (India)<span className="req">*</span>
           </label>
           <div className="phone-input-wrap">
             <span className="phone-prefix">🇮🇳 +91</span>

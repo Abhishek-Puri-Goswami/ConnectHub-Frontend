@@ -60,7 +60,7 @@ export default function PasswordStrengthMeter({ password }) {
   ]
 
   return (
-    <div className="pw-meter">
+    <div className="pw-meter pw-strength">
       {/* Progress bar — width reflects the fraction of rules passed */}
       <div className="pw-strength-track">
         <div
