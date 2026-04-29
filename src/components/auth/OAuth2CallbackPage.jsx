@@ -42,7 +42,7 @@
 import { useEffect, useState } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import { useAuthStore } from '../../store/authStore'
-import { Loader2, AlertCircle, MessageCircle } from 'lucide-react'
+import { Loader2, AlertCircle, MessageCircle, Mail } from 'lucide-react'
 import AuthLayout from './AuthLayout'
 import './AuthStyles.css'
 
@@ -120,6 +120,26 @@ export default function OAuth2CallbackPage() {
           </div>
           <h2 className="auth-title" style={{ color: 'var(--danger)' }}>Authentication failed</h2>
           <p className="auth-subtitle">{error}</p>
+          {error.toLowerCase().includes('suspend') && (
+            <div style={{
+              display: 'flex', alignItems: 'center', gap: 10,
+              margin: '16px 0 8px',
+              padding: '12px 16px',
+              background: 'var(--surface-3)',
+              border: '1px solid var(--border)',
+              borderRadius: 'var(--r-md)',
+              width: '100%',
+              boxSizing: 'border-box',
+            }}>
+              <Mail size={16} style={{ color: 'var(--text-muted)', flexShrink: 0 }}/>
+              <span style={{ fontSize: 13, color: 'var(--text-soft)' }}>
+                Contact support:{' '}
+                <a href="mailto:connecthub.support@gmail.com" style={{ color: 'var(--primary)', fontWeight: 600, textDecoration: 'none' }}>
+                  connecthub.support@gmail.com
+                </a>
+              </span>
+            </div>
+          )}
           <button className="btn btn-primary btn-block" onClick={() => navigate('/login')} style={{ marginTop: 8 }}>
             Back to sign in
           </button>

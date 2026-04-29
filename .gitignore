@@ -4,3 +4,11 @@ dist
 .env.*
 !.env.example
 *.log
+
+# IDE
+.idea/
+.vscode/
+
+# Test artifacts
+playwright-report/
+test-results/

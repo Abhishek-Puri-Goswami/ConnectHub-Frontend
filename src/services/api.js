@@ -57,7 +57,7 @@ class ApiService {
    *   the same request is retried once with the new token. On failure, the
    *   session is cleared and the user is redirected to the login page.
    */
-  async req(method, path, body, auth = true) {
+  async req(method, path, body, auth = true, quiet = false) {
     const headers = { "Content-Type": "application/json" }
     const token = localStorage.getItem("accessToken")
     if (auth && token) headers["Authorization"] = "Bearer " + token
@@ -65,20 +65,21 @@ class ApiService {
     const config = { method, headers }
     if (body) config.body = JSON.stringify(body)
 
+    const toast = (msg, variant) => { if (!quiet) useToastStore.getState().addToast(msg, variant) }
+
     let res;
     try {
       res = await fetch(API + path, config)
     } catch (err) {
-      // Network error (e.g. backend server down, connection refused)
-      useToastStore.getState().addToast("API Gateway or Network is unreachable.", 'danger');
+      toast("API Gateway or Network is unreachable.", 'danger');
       throw err;
     }
 
     if (res.status === 401 && auth) {
       const ok = await this.tryRefresh()
-      if (ok) return this.req(method, path, body, auth)
-      
-      useToastStore.getState().addToast("Your session has expired. Please log in again.", 'warning');
+      if (ok) return this.req(method, path, body, auth, quiet)
+
+      toast("Your session has expired. Please log in again.", 'warning');
       localStorage.clear()
       window.location.href = "/login"
       throw new Error("Session expired")
@@ -90,7 +91,7 @@ class ApiService {
       if (res.status === 502 || res.status === 503 || res.status === 504) {
         const serviceName = getServiceName(path);
         const errorMsg = `${serviceName} is currently unavailable. Please try again later.`;
-        useToastStore.getState().addToast(errorMsg, 'danger');
+        toast(errorMsg, 'danger');
         throw new Error(errorMsg);
       }
 
@@ -100,8 +101,7 @@ class ApiService {
        *   Spring default { error, message, path } — built-in error format
        */
       const msg = data?.message || data?.error || (Array.isArray(data?.errors) ? data.errors.join(', ') : null) || 'Request failed'
-      // Automatically trigger global error toast
-      useToastStore.getState().addToast(msg, 'danger');
+      toast(msg, 'danger');
       throw new Error(msg)
     }
     return data
@@ -325,12 +325,13 @@ class ApiService {
       body: fd,
     })
     if (!res.ok) {
-      let errText = "HTTP " + res.status;
+      const raw = await res.text()
+      let errText = "HTTP " + res.status
       try {
-        const errJson = await res.json()
-        errText = errJson.message || errJson.error || errText
+        const errJson = JSON.parse(raw)
+        errText = errJson.message || errJson.error || raw || errText
       } catch (e) {
-        errText += " " + await res.text()
+        if (raw) errText += ": " + raw
       }
       throw new Error(errText)
     }
@@ -355,6 +356,7 @@ class ApiService {
   markAllNotifsRead(uid) { return this.req("PUT", "/notifications/user/" + uid + "/read-all") }
   getUnreadCount(uid) { return this.req("GET", "/notifications/user/" + uid + "/unread-count") }
   getWsUnreadCounts(uid) { return this.req("GET", "/ws/unread/" + uid) }
+  resetWsUnreadCount(uid, rid) { return this.req("DELETE", "/ws/unread/" + uid + "?roomId=" + encodeURIComponent(rid), null, true, true) }
 
   /*
    * Presence methods — routed to the presence-service via /presence/* path.

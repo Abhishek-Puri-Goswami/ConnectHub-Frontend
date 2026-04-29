@@ -9,10 +9,10 @@
  * How the upgrade flow works end-to-end:
  *   1. User clicks "Upgrade to PRO" → openUpgradeModal() shows the UpgradeModal.
  *   2. User clicks "Subscribe" in the modal → initiateCheckout() is called.
- *   3. initiateCheckout() calls paymentApi.createSubscription() to register the
- *      plan with Razorpay on the backend. The backend returns a razorpaySubId.
+ *   3. initiateCheckout() calls paymentApi.createSubscription() to create the
+ *      one-time Razorpay order on the backend. The backend returns a razorpayOrderId.
  *   4. initiateCheckout() opens the Razorpay Checkout widget (window.Razorpay)
- *      with the subscription ID. The user completes payment in the widget.
+ *      with the order ID. The user completes payment in the widget.
  *   5. Razorpay sends a webhook to the payment-service backend (async).
  *      The backend upgrades the user's subscriptionTier to PRO.
  *   6. The handler callback calls refreshAuthAfterPayment() which calls the token
@@ -20,7 +20,7 @@
  *   7. Then fetchSubscription() is called to update the UI to show PRO status.
  *
  * State fields:
- *   subscription    — current subscription object { id, plan, status, razorpaySubId, ... }
+ *   subscription    — current subscription object { id, plan, status, razorpayOrderId, ... }
  *                     null until first fetched. 404 from backend → FREE tier default.
  *   payments        — array of past payment records for BillingPage history tab.
  *   loading         — true while any async call is in progress.
@@ -28,10 +28,10 @@
  *   upgradeModalOpen — controls whether the full-screen upgrade modal is visible.
  *   razorpayReady   — true once the Razorpay checkout.js SDK script has loaded.
  */
-import { create } from 'zustand'
-import { paymentApi } from '../services/paymentApi'
-import { api } from '../services/api'
-import { useAuthStore } from './authStore'
+import { create } from "zustand";
+import { paymentApi } from "../services/paymentApi";
+import { api } from "../services/api";
+import { useAuthStore } from "./authStore";
 
 export const usePaymentStore = create((set, get) => ({
   subscription: null,
@@ -56,15 +56,18 @@ export const usePaymentStore = create((set, get) => ({
    * default to showing them as a FREE user. Any other error is surfaced to the UI.
    */
   fetchSubscription: async () => {
-    set({ loading: true, error: null })
+    set({ loading: true, error: null });
     try {
-      const data = await paymentApi.getSubscriptionStatus()
-      set({ subscription: data, loading: false })
+      const data = await paymentApi.getSubscriptionStatus();
+      set({ subscription: data, loading: false });
     } catch (e) {
       if (e.status === 404) {
-        set({ subscription: { plan: 'FREE', status: 'ACTIVE' }, loading: false })
+        set({
+          subscription: { plan: "FREE", status: "ACTIVE" },
+          loading: false,
+        });
       } else {
-        set({ error: e.message, loading: false })
+        set({ error: e.message, loading: false });
       }
     }
   },
@@ -79,13 +82,13 @@ export const usePaymentStore = create((set, get) => ({
    * the entire app immediately reflects the PRO status.
    */
   refreshAuthAfterPayment: async () => {
-    await api.refreshSession()
-    const token = localStorage.getItem('accessToken')
-    const userStr = localStorage.getItem('user')
+    await api.refreshSession();
+    const token = localStorage.getItem("accessToken");
+    const userStr = localStorage.getItem("user");
     useAuthStore.setState({
       token,
       user: userStr ? JSON.parse(userStr) : null,
-    })
+    });
   },
 
   /*
@@ -93,22 +96,22 @@ export const usePaymentStore = create((set, get) => ({
    * Used by BillingPage to show the billing history tab with dates, amounts, and statuses.
    */
   fetchPaymentHistory: async () => {
-    set({ loading: true })
+    set({ loading: true });
     try {
-      const data = await paymentApi.getPaymentHistory()
-      set({ payments: data || [], loading: false })
+      const data = await paymentApi.getPaymentHistory();
+      set({ payments: data || [], loading: false });
     } catch (e) {
-      set({ error: e.message, loading: false })
+      set({ error: e.message, loading: false });
     }
   },
 
   /*
-   * initiateCheckout({ planId, razorpayKeyId, userEmail, userName }) — opens the Razorpay payment widget.
+   * initiateCheckout({ razorpayKeyId, userEmail, userName }) — opens the Razorpay payment widget.
    *
    * Steps:
-   *   1. Calls paymentApi.createSubscription(planId) to register the subscription
-   *      on the backend and get back a razorpaySubId.
-   *   2. Creates a new window.Razorpay instance with the subscription ID and prefills
+   *   1. Calls paymentApi.createOrder() to create a Razorpay order on the backend
+   *      and get back a razorpayOrderId.
+   *   2. Creates a new window.Razorpay instance with the order ID and prefills
    *      the user's email and name so they don't have to type them again.
    *   3. Calls rzp.open() to show the Razorpay payment popup to the user.
    *   4. On successful payment (handler callback): calls refreshAuthAfterPayment()
@@ -116,49 +119,68 @@ export const usePaymentStore = create((set, get) => ({
    *   5. On modal dismiss (user closed without paying): rejects the Promise so the
    *      calling component can show a "cancelled" message.
    */
-  initiateCheckout: async ({ planId = 'plan_pro', razorpayKeyId, userEmail, userName }) => {
+  initiateCheckout: async ({ razorpayKeyId, userEmail, userName }) => {
     if (!window.Razorpay) {
-      throw new Error('Razorpay SDK not loaded. Refresh and try again.')
+      throw new Error("Razorpay SDK not loaded. Refresh and try again.");
     }
-    set({ loading: true, error: null })
+    set({ loading: true, error: null });
     try {
-      const sub = await paymentApi.createSubscription(planId)
-      const rzpSubId = sub.razorpaySubId
+      // Always fetch the key from the backend so test/live mode is driven by
+      // server config, not a frontend env var that can easily get out of sync.
+      let keyId = razorpayKeyId;
+      let amountPaise;
+      try {
+        const cfg = await paymentApi.getConfig();
+        if (cfg?.razorpayKeyId) keyId = cfg.razorpayKeyId;
+        if (cfg?.amountPaise) amountPaise = cfg.amountPaise;
+      } catch {
+        // fall back to the caller-supplied key (env var) if config endpoint fails
+      }
+
+      const sub = await paymentApi.createOrder();
+      const razorpayOrderId = sub.razorpayOrderId;
+      const normalizedAmount = Number(amountPaise);
+      const validAmount =
+        Number.isInteger(normalizedAmount) && normalizedAmount >= 100
+          ? normalizedAmount
+          : 9900;
 
       return new Promise((resolve, reject) => {
         const rzp = new window.Razorpay({
-          key: razorpayKeyId,
-          subscription_id: rzpSubId,
-          name: 'ConnectHub',
-          description: 'ConnectHub PRO — higher limits, 10GB media, unlimited groups',
-          image: '/logo.png',
+          key: keyId,
+          order_id: razorpayOrderId,
+          amount: validAmount,
+          currency: "INR",
+          name: "ConnectHub",
+          description: "ConnectHub PRO one-time upgrade",
+          image: "/logo.png",
           prefill: {
-            email: userEmail || '',
-            name: userName || '',
+            email: userEmail || "",
+            name: userName || "",
           },
-          theme: { color: '#7C3AED' },
+          theme: { color: "#7C3AED" },
           handler: async function (response) {
-            set({ loading: false })
+            set({ loading: false });
             try {
-              await get().refreshAuthAfterPayment()
+              await get().refreshAuthAfterPayment();
             } catch {
               /* webhook may lag; user can refresh page */
             }
-            await get().fetchSubscription()
-            resolve(response)
+            await get().fetchSubscription();
+            resolve(response);
           },
           modal: {
             ondismiss: () => {
-              set({ loading: false })
-              reject(new Error('Payment cancelled'))
+              set({ loading: false });
+              reject(new Error("Payment cancelled"));
             },
           },
-        })
-        rzp.open()
-      })
+        });
+        rzp.open();
+      });
     } catch (e) {
-      set({ loading: false, error: e.message })
-      throw e
+      set({ loading: false, error: e.message });
+      throw e;
     }
   },
 
@@ -168,8 +190,15 @@ export const usePaymentStore = create((set, get) => ({
    * Used by components to decide whether to show upgrade prompts or unlock features.
    */
   isPro: () => {
-    const { subscription } = get()
-    const status = (subscription?.status || '').toUpperCase()
-    return subscription?.plan !== 'FREE' && !['CANCELLED', 'EXPIRED'].includes(status)
+    const role = (useAuthStore.getState().user?.role || "").toUpperCase();
+    if (role === "ADMIN" || role === "PLATFORM_ADMIN") return true;
+    const { subscription } = get();
+    if (!subscription) return false;
+    const status = (subscription.status || "").toUpperCase();
+    // PENDING means order created but payment not yet confirmed
+    if (["CANCELLED", "EXPIRED", "PENDING"].includes(status)) return false;
+    // Client-side guard: treat as expired if endDate has passed
+    if (subscription.endDate && new Date(subscription.endDate) < new Date()) return false;
+    return subscription.plan !== "FREE";
   },
-}))
+}));
