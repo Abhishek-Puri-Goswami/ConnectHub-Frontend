@@ -52,7 +52,7 @@ import { useAuthStore } from '../../store/authStore'
 import {
   Shield, Users, Search, ArrowLeft, Ban, CheckCircle, Trash2,
   ScrollText, Loader2, AlertCircle, RefreshCw, ChevronLeft, ChevronRight,
-  UserX, UserCheck, Activity, ArrowUp, ArrowDown, ArrowUpDown
+  UserX, UserCheck, Activity, ArrowUp, ArrowDown, ArrowUpDown, Wifi, Crown, UserCog
 } from 'lucide-react'
 import { format } from 'date-fns'
 import './AdminDashboard.css'
@@ -60,11 +60,12 @@ import './AdminDashboard.css'
 export default function AdminDashboard() {
   const navigate = useNavigate()
   const { user } = useAuthStore()
+  const viewerIsPlatformAdmin = (user?.role || '').toUpperCase() === 'PLATFORM_ADMIN'
   const {
     users, auditLogs, auditPage, loading, error,
     searchQuery, setSearchQuery,
-    fetchUsers, fetchAuditLogs, suspendUser, reactivateUser, deleteUser,
-    filteredUsers,
+    fetchUsers, fetchAuditLogs, suspendUser, reactivateUser, deleteUser, changeRole,
+    filteredUsers, onlineCount, fetchOnlineCount,
   } = useAdminStore()
 
   /*
@@ -84,10 +85,29 @@ export default function AdminDashboard() {
     setUsersPage(0)
   }, [searchQuery])
 
-  /* Load all users and the first page of audit logs on mount */
+  /* Redirect non-admin users away from /admin to prevent unauthorised access. */
+  useEffect(() => {
+    const role = (user?.role || '').toUpperCase()
+    if (!['ADMIN', 'PLATFORM_ADMIN'].includes(role)) {
+      navigate('/chat')
+    }
+  }, [user?.role])
+
+  /* Load all users, audit logs, and online count on mount, then keep counts fresh */
   useEffect(() => {
     fetchUsers()
     fetchAuditLogs(0)
+    fetchOnlineCount()
+
+    /* Refresh online count every 15 s — presence changes frequently */
+    const onlineTimer = setInterval(fetchOnlineCount, 15_000)
+    /* Refresh user list every 60 s — catches suspensions/deletions from other sessions */
+    const usersTimer = setInterval(fetchUsers, 60_000)
+
+    return () => {
+      clearInterval(onlineTimer)
+      clearInterval(usersTimer)
+    }
   }, [])
 
   /*
@@ -110,8 +130,8 @@ export default function AdminDashboard() {
       valA = (a.role || '').toUpperCase()
       valB = (b.role || '').toUpperCase()
     } else if (sortField === 'status') {
-      valA = (a.accountStatus || a.status || '').toUpperCase()
-      valB = (b.accountStatus || b.status || '').toUpperCase()
+      valA = a.active === false ? 'SUSPENDED' : 'ACTIVE'
+      valB = b.active === false ? 'SUSPENDED' : 'ACTIVE'
     } else {
       valA = a.createdAt ? new Date(a.createdAt).getTime() : 0
       valB = b.createdAt ? new Date(b.createdAt).getTime() : 0
@@ -146,9 +166,16 @@ export default function AdminDashboard() {
 
   const stats = {
     total: users.length,
-    active: users.filter(u => (u.accountStatus || u.status || 'ACTIVE').toUpperCase() === 'ACTIVE').length,
-    suspended: users.filter(u => (u.accountStatus || u.status || 'ACTIVE').toUpperCase() === 'SUSPENDED').length,
-    admins: users.filter(u => (u.role || '').toUpperCase() === 'ADMIN' || (u.role || '').toUpperCase() === 'PLATFORM_ADMIN').length,
+    active: users.filter(u => u.active !== false).length,
+    suspended: users.filter(u => u.active === false).length,
+    admins: users.filter(u => ['ADMIN', 'PLATFORM_ADMIN'].includes((u.role || '').toUpperCase())).length,
+    pro: users.filter(u => (u.subscriptionTier || 'FREE').toUpperCase() !== 'FREE').length,
+  }
+
+  /* parseTs — appends 'Z' to bare LocalDateTime strings so they're treated as UTC */
+  const parseTs = (s) => {
+    if (!s) return null
+    return new Date(s.endsWith('Z') || s.includes('+') ? s : s + 'Z')
   }
 
   /*
@@ -163,6 +190,8 @@ export default function AdminDashboard() {
       if (confirmAction.type === 'suspend') await suspendUser(confirmAction.userId)
       if (confirmAction.type === 'reactivate') await reactivateUser(confirmAction.userId)
       if (confirmAction.type === 'delete') await deleteUser(confirmAction.userId)
+      if (confirmAction.type === 'promote') await changeRole(confirmAction.userId, 'ADMIN')
+      if (confirmAction.type === 'demote') await changeRole(confirmAction.userId, 'USER')
     } catch { /* error is in store */ }
     setConfirmAction(null)
   }
@@ -198,7 +227,7 @@ export default function AdminDashboard() {
         </button>
       </div>
 
-      {/* Stats row — derived from in-memory users array, no extra API call */}
+      {/* Stats row */}
       <div className="admin-stats">
         <div className="admin-stat-card">
           <div className="admin-stat-icon coral"><Users size={18} /></div>
@@ -220,16 +249,26 @@ export default function AdminDashboard() {
           <div className="admin-stat-value">{stats.admins}</div>
           <div className="admin-stat-label">Admins</div>
         </div>
+        <div className="admin-stat-card">
+          <div className="admin-stat-icon mint"><Wifi size={18} /></div>
+          <div className="admin-stat-value">{onlineCount ?? '—'}</div>
+          <div className="admin-stat-label">Online Now</div>
+        </div>
+        <div className="admin-stat-card">
+          <div className="admin-stat-icon lavender"><Crown size={18} /></div>
+          <div className="admin-stat-value">{stats.pro}</div>
+          <div className="admin-stat-label">PRO Users</div>
+        </div>
       </div>
 
       {/* Toolbar: tab switcher + search bar (only on Users tab) */}
       <div className="admin-toolbar">
         <div className="admin-tabs">
-          <button className={`admin-tab ${tab === 'users' ? 'active' : ''}`}
+          <button role="tab" className={`admin-tab ${tab === 'users' ? 'active' : ''}`}
             onClick={() => setTab('users')}>
             <Users size={14} /> Users
           </button>
-          <button className={`admin-tab ${tab === 'audit' ? 'active' : ''}`}
+          <button role="tab" className={`admin-tab ${tab === 'audit' ? 'active' : ''}`}
             onClick={() => setTab('audit')}>
             <ScrollText size={14} /> Audit Logs
           </button>
@@ -240,7 +279,7 @@ export default function AdminDashboard() {
           <div className="admin-search-bar">
             <Search size={15} />
             <input
-              placeholder="Search by name, email, or username…"
+              placeholder="Search by name, phone, email, or username..."
               value={searchQuery}
               onChange={e => setSearchQuery(e.target.value)}
             />
@@ -278,12 +317,14 @@ export default function AdminDashboard() {
                     <th onClick={() => handleSort('name')} style={{ cursor: 'pointer' }}>
                       <div style={{ display: 'flex', alignItems: 'center' }}>User <SortIcon field="name" /></div>
                     </th>
+                    <th>Email</th>
                     <th onClick={() => handleSort('username')} style={{ cursor: 'pointer' }}>
                       <div style={{ display: 'flex', alignItems: 'center' }}>Username <SortIcon field="username" /></div>
                     </th>
                     <th onClick={() => handleSort('role')} style={{ cursor: 'pointer' }}>
                       <div style={{ display: 'flex', alignItems: 'center' }}>Role <SortIcon field="role" /></div>
                     </th>
+                    <th>Plan</th>
                     <th onClick={() => handleSort('status')} style={{ cursor: 'pointer' }}>
                       <div style={{ display: 'flex', alignItems: 'center' }}>Status <SortIcon field="status" /></div>
                     </th>
@@ -296,35 +337,49 @@ export default function AdminDashboard() {
                 <tbody>
                   {paginatedUsers.map(u => {
                     const uid = u.userId || u.id
-                    const status = (u.accountStatus || u.status || 'ACTIVE').toUpperCase()
+                    const status = u.active === false ? 'SUSPENDED' : 'ACTIVE'
                     const role = (u.role || 'USER').toUpperCase()
+                    const tier = (u.subscriptionTier || 'FREE').toUpperCase()
+                    const isPro = tier !== 'FREE'
 
-                    /*
-                     * isCurrentUser — prevents the admin from acting on their own account.
-                     * isAdmin — admins are shown as "Protected" to prevent accidental lockout.
-                     */
                     const isCurrentUser = uid === user?.userId
-                    const isAdmin = role === 'ADMIN' || role === 'PLATFORM_ADMIN'
+                    const isPlatformAdmin = role === 'PLATFORM_ADMIN'
+                    const isAdmin = role === 'ADMIN' || isPlatformAdmin
+                    const isGuest = role === 'GUEST'
 
                     return (
                       <tr key={uid}>
                         <td>
                           <div className="admin-user-cell">
-                            {/* Avatar initials — first character of name or username */}
                             <div className="admin-user-av">
                               {(u.fullName || u.username || '?')[0].toUpperCase()}
                             </div>
                             <div className="admin-user-info">
                               <div className="admin-user-name">{u.fullName || u.username}</div>
-                              <div className="admin-user-email">{u.email || '—'}</div>
                             </div>
                           </div>
                         </td>
+                        <td style={{ fontSize: '0.82rem', color: 'var(--text-soft)' }}>{u.email || '—'}</td>
                         <td>@{u.username || '—'}</td>
                         <td>
-                          <span className={`admin-badge ${isAdmin ? 'admin' : 'user'}`}>
-                            {isAdmin ? <><Shield size={10} /> Admin</> : 'User'}
-                          </span>
+                          {isPlatformAdmin ? (
+                            <span className="admin-badge admin"><Shield size={10} /> Platform Admin</span>
+                          ) : isAdmin ? (
+                            <span className="admin-badge admin"><Shield size={10} /> Admin</span>
+                          ) : isGuest ? (
+                            <span className="admin-badge pending">Guest</span>
+                          ) : (
+                            <span className="admin-badge user">User</span>
+                          )}
+                        </td>
+                        <td>
+                          {isPro ? (
+                            <span className="admin-badge admin" style={{ background: 'var(--lavender, #B8A4F4)', color: '#fff' }}>
+                              <Crown size={10} /> {tier}
+                            </span>
+                          ) : (
+                            <span style={{ fontSize: '0.76rem', color: 'var(--text-muted)' }}>FREE</span>
+                          )}
                         </td>
                         <td>
                           <span className={`admin-badge ${status === 'ACTIVE' ? 'active' : status === 'SUSPENDED' ? 'suspended' : 'pending'}`}>
@@ -332,11 +387,12 @@ export default function AdminDashboard() {
                           </span>
                         </td>
                         <td style={{ fontSize: '0.78rem', color: 'var(--text-muted)' }}>
-                          {u.createdAt ? format(new Date(u.createdAt), 'MMM d, yyyy') : '—'}
+                          {u.createdAt ? format(parseTs(u.createdAt), 'MMM d, yyyy') : '—'}
                         </td>
                         <td>
-                          {/* Only show action buttons for non-admin, non-self users */}
-                          {!isCurrentUser && !isAdmin && (
+                          {/* Actions visible only when: not yourself, not platform admin,
+                              and if target is admin the viewer must be platform admin */}
+                          {!isCurrentUser && !isPlatformAdmin && (!isAdmin || viewerIsPlatformAdmin) && (
                             <div className="admin-actions">
                               {status === 'ACTIVE' ? (
                                 <button className="admin-act-btn warn"
@@ -349,6 +405,21 @@ export default function AdminDashboard() {
                                   <CheckCircle size={12} /> Reactivate
                                 </button>
                               )}
+                              {viewerIsPlatformAdmin && (
+                                !isAdmin ? (
+                                  <button className="admin-act-btn" style={{ color: 'var(--accent)' }}
+                                    title="Promote to Admin"
+                                    onClick={() => setConfirmAction({ type: 'promote', userId: uid, name: u.username })}>
+                                    <UserCog size={12} />
+                                  </button>
+                                ) : (
+                                  <button className="admin-act-btn" style={{ color: 'var(--text-muted)' }}
+                                    title="Demote to User"
+                                    onClick={() => setConfirmAction({ type: 'demote', userId: uid, name: u.username })}>
+                                    <UserCog size={12} />
+                                  </button>
+                                )
+                              )}
                               <button className="admin-act-btn danger"
                                 onClick={() => setConfirmAction({ type: 'delete', userId: uid, name: u.username })}>
                                 <Trash2 size={12} />
@@ -356,7 +427,10 @@ export default function AdminDashboard() {
                             </div>
                           )}
                           {isCurrentUser && <span style={{ fontSize: '0.76rem', color: 'var(--text-muted)' }}>You</span>}
-                          {isAdmin && !isCurrentUser && <span style={{ fontSize: '0.76rem', color: 'var(--accent)' }}>Protected</span>}
+                          {isPlatformAdmin && !isCurrentUser && <span style={{ fontSize: '0.76rem', color: 'var(--accent)' }}>Protected</span>}
+                          {!isCurrentUser && !isPlatformAdmin && isAdmin && !viewerIsPlatformAdmin && (
+                            <span style={{ fontSize: '0.76rem', color: 'var(--text-muted)' }}>Admin</span>
+                          )}
                         </td>
                       </tr>
                     )
@@ -419,11 +493,13 @@ export default function AdminDashboard() {
                     </div>
                     <div className="audit-body">
                       <div className="audit-action-text">{log.action?.replace(/_/g, ' ')}</div>
-                      <div className="audit-detail">{log.details || `${log.entityType} #${log.entityId}`}</div>
+                      <div className="audit-detail">
+                        {log.details || (log.targetName ? `Target: ${log.targetName}` : `${log.entityType || 'Entity'} #${log.entityId || '—'}`)}
+                      </div>
                       <div className="audit-meta">
-                        <span>Admin #{log.adminId}</span>
+                        <span>{log.actorName || `Admin #${log.adminId}`}</span>
                         {log.ipAddress && <span>IP: {log.ipAddress}</span>}
-                        {log.createdAt && <span>{format(new Date(log.createdAt), 'MMM d, yyyy h:mm a')}</span>}
+                        {log.createdAt && <span>{format(parseTs(log.createdAt), 'MMM d, yyyy h:mm a')}</span>}
                       </div>
                     </div>
                   </div>
@@ -463,22 +539,28 @@ export default function AdminDashboard() {
        */}
       {confirmAction && (
         <div className="admin-confirm-overlay" onClick={() => setConfirmAction(null)}>
-          <div className="admin-confirm-card" onClick={e => e.stopPropagation()}>
+          <div role="dialog" className="admin-confirm-card" onClick={e => e.stopPropagation()}>
             <h3>
               {confirmAction.type === 'delete' ? 'Delete User Permanently?' :
-               confirmAction.type === 'suspend' ? 'Suspend User?' : 'Reactivate User?'}
+               confirmAction.type === 'suspend' ? 'Suspend User?' :
+               confirmAction.type === 'reactivate' ? 'Reactivate User?' :
+               confirmAction.type === 'promote' ? 'Promote to Admin?' : 'Demote to User?'}
             </h3>
             <p>
               Are you sure you want to {confirmAction.type}{' '}
               <strong>@{confirmAction.name}</strong>?
               {confirmAction.type === 'delete' && ' This action cannot be undone.'}
+              {confirmAction.type === 'promote' && ' They will gain full admin privileges.'}
+              {confirmAction.type === 'demote' && ' They will lose admin privileges.'}
             </p>
             <div className="admin-confirm-actions">
               <button className="admin-confirm-cancel" onClick={() => setConfirmAction(null)}>Cancel</button>
               <button className="admin-confirm-danger" onClick={handleAction}>
                 {loading ? <Loader2 size={14} className="spin" /> : null}
                 {confirmAction.type === 'delete' ? 'Delete' :
-                 confirmAction.type === 'suspend' ? 'Suspend' : 'Reactivate'}
+                 confirmAction.type === 'suspend' ? 'Suspend' :
+                 confirmAction.type === 'reactivate' ? 'Reactivate' :
+                 confirmAction.type === 'promote' ? 'Promote' : 'Demote'}
               </button>
             </div>
           </div>

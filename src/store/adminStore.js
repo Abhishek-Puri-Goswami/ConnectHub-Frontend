@@ -27,8 +27,8 @@
  * The filteredUsers() method is a derived selector — it filters the users array
  * by the searchQuery without making any network call, so search is instant.
  */
-import { create } from 'zustand'
-import { adminApi } from '../services/adminApi'
+import { create } from "zustand";
+import { adminApi } from "../services/adminApi";
 
 export const useAdminStore = create((set, get) => ({
   users: [],
@@ -36,7 +36,8 @@ export const useAdminStore = create((set, get) => ({
   auditPage: { number: 0, totalPages: 0, totalElements: 0 },
   loading: false,
   error: null,
-  searchQuery: '',
+  searchQuery: "",
+  onlineCount: null,
 
   /*
    * setSearchQuery(q) — updates the search filter string.
@@ -50,12 +51,12 @@ export const useAdminStore = create((set, get) => ({
    * Populates the users array which is displayed in the AdminDashboard table.
    */
   fetchUsers: async () => {
-    set({ loading: true, error: null })
+    set({ loading: true, error: null });
     try {
-      const data = await adminApi.getAllUsers()
-      set({ users: Array.isArray(data) ? data : [], loading: false })
+      const data = await adminApi.getAllUsers();
+      set({ users: Array.isArray(data) ? data : [], loading: false });
     } catch (e) {
-      set({ error: e.message, loading: false })
+      set({ error: e.message, loading: false });
     }
   },
 
@@ -66,20 +67,18 @@ export const useAdminStore = create((set, get) => ({
    * Throws the error so AdminDashboard can show a toast notification on failure.
    */
   suspendUser: async (userId) => {
-    set({ loading: true, error: null })
+    set({ loading: true, error: null });
     try {
-      await adminApi.suspendUser(userId)
-      set(state => ({
-        users: state.users.map(u =>
-          u.userId === userId || u.id === userId
-            ? { ...u, status: 'SUSPENDED', accountStatus: 'SUSPENDED' }
-            : u
+      await adminApi.suspendUser(userId);
+      set((state) => ({
+        users: state.users.map((u) =>
+          u.userId === userId || u.id === userId ? { ...u, active: false } : u,
         ),
         loading: false,
-      }))
+      }));
     } catch (e) {
-      set({ error: e.message, loading: false })
-      throw e
+      set({ error: e.message, loading: false });
+      throw e;
     }
   },
 
@@ -88,20 +87,18 @@ export const useAdminStore = create((set, get) => ({
    * Updates the local user's status to ACTIVE without refetching.
    */
   reactivateUser: async (userId) => {
-    set({ loading: true, error: null })
+    set({ loading: true, error: null });
     try {
-      await adminApi.reactivateUser(userId)
-      set(state => ({
-        users: state.users.map(u =>
-          u.userId === userId || u.id === userId
-            ? { ...u, status: 'ACTIVE', accountStatus: 'ACTIVE' }
-            : u
+      await adminApi.reactivateUser(userId);
+      set((state) => ({
+        users: state.users.map((u) =>
+          u.userId === userId || u.id === userId ? { ...u, active: true } : u,
         ),
         loading: false,
-      }))
+      }));
     } catch (e) {
-      set({ error: e.message, loading: false })
-      throw e
+      set({ error: e.message, loading: false });
+      throw e;
     }
   },
 
@@ -111,16 +108,16 @@ export const useAdminStore = create((set, get) => ({
    * disappears from the table immediately without a full refresh.
    */
   deleteUser: async (userId) => {
-    set({ loading: true, error: null })
+    set({ loading: true, error: null });
     try {
-      await adminApi.deleteUser(userId)
-      set(state => ({
-        users: state.users.filter(u => (u.userId || u.id) !== userId),
+      await adminApi.deleteUser(userId);
+      set((state) => ({
+        users: state.users.filter((u) => (u.userId || u.id) !== userId),
         loading: false,
-      }))
+      }));
     } catch (e) {
-      set({ error: e.message, loading: false })
-      throw e
+      set({ error: e.message, loading: false });
+      throw e;
     }
   },
 
@@ -130,9 +127,9 @@ export const useAdminStore = create((set, get) => ({
    * Handles both paginated (data.content) and plain array (data) response shapes.
    */
   fetchAuditLogs: async (page = 0) => {
-    set({ loading: true, error: null })
+    set({ loading: true, error: null });
     try {
-      const data = await adminApi.getAuditLogs(page)
+      const data = await adminApi.getAuditLogs(page);
       set({
         auditLogs: data?.content || data || [],
         auditPage: {
@@ -141,25 +138,54 @@ export const useAdminStore = create((set, get) => ({
           totalElements: data?.totalElements || 0,
         },
         loading: false,
-      })
+      });
     } catch (e) {
-      set({ error: e.message, loading: false })
+      set({ error: e.message, loading: false });
+    }
+  },
+
+  changeRole: async (userId, role) => {
+    set({ loading: true, error: null });
+    try {
+      const updated = await adminApi.changeRole(userId, role);
+      set((state) => ({
+        users: state.users.map((u) =>
+          u.userId === userId || u.id === userId
+            ? { ...u, role: updated.role }
+            : u,
+        ),
+        loading: false,
+      }));
+    } catch (e) {
+      set({ error: e.message, loading: false });
+      throw e;
+    }
+  },
+
+  fetchOnlineCount: async () => {
+    try {
+      const count = await adminApi.getOnlineCount();
+      set({ onlineCount: typeof count === "number" ? count : null });
+    } catch {
+      /* non-critical — leave as null */
     }
   },
 
   /*
    * filteredUsers() — returns the users array filtered by the current searchQuery.
-   * Filters by username, email, and full name (case-insensitive).
+   * Filters by username, email, phone number, and full name (case-insensitive).
    * Returns all users when searchQuery is empty.
    */
   filteredUsers: () => {
-    const { users, searchQuery } = get()
-    if (!searchQuery) return users
-    const q = searchQuery.toLowerCase()
-    return users.filter(u =>
-      (u.username || '').toLowerCase().includes(q) ||
-      (u.email || '').toLowerCase().includes(q) ||
-      (u.fullName || '').toLowerCase().includes(q)
-    )
+    const { users, searchQuery } = get();
+    if (!searchQuery) return users;
+    const q = searchQuery.toLowerCase();
+    return users.filter(
+      (u) =>
+        (u.username || "").toLowerCase().includes(q) ||
+        (u.email || "").toLowerCase().includes(q) ||
+        (u.phoneNumber || "").toLowerCase().includes(q) ||
+        (u.fullName || "").toLowerCase().includes(q),
+    );
   },
-}))
+}));
