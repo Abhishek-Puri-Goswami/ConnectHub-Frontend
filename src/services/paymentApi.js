@@ -5,17 +5,17 @@
  *   Handles all communication with the payment-service backend for managing
  *   user subscriptions via the Razorpay payment gateway.
  *
- * How subscriptions work in ConnectHub:
+ * How payments work in ConnectHub:
  *   There are two tiers: FREE and PRO.
  *   - FREE users: limited messages per hour, smaller file upload limit.
- *   - PRO users: higher limits, unlocked after a successful Razorpay subscription.
+ *   - PRO users: higher limits, unlocked after a successful one-time payment.
  *
- *   The subscription flow works as follows:
- *   1. The frontend calls createSubscription() to ask the backend to create a
- *      Razorpay subscription object. The backend returns a razorpaySubId.
- *   2. The frontend opens the Razorpay checkout widget using that ID.
+ *   The payment flow works as follows:
+ *   1. The frontend calls createOrder() to ask the backend to create a
+ *      one-time Razorpay order. The backend returns a razorpayOrderId.
+ *   2. The frontend opens the Razorpay checkout widget using that order ID.
  *   3. After payment, Razorpay sends a webhook to the backend (payment-service),
- *      which upgrades the user's subscriptionTier to PRO in the database.
+ *      which upgrades the user's plan to PRO in the database.
  *   4. The frontend calls getSubscriptionStatus() to confirm the upgrade and
  *      update the user object stored in localStorage/authStore.
  *
@@ -23,7 +23,7 @@
  * that attaches the JWT token. Kept separate from the main api.js to isolate
  * all payment-related calls in one place for clarity.
  */
-const API = '/api/v1'
+const API = "/api/v1";
 
 class PaymentApiService {
   /*
@@ -33,39 +33,37 @@ class PaymentApiService {
    * distinguish between different failure types (e.g., 409 = already subscribed).
    */
   async req(method, path, body) {
-    const token = localStorage.getItem('accessToken')
-    const headers = { 'Content-Type': 'application/json' }
-    if (token) headers['Authorization'] = 'Bearer ' + token
+    const token = localStorage.getItem("accessToken");
+    const headers = { "Content-Type": "application/json" };
+    if (token) headers["Authorization"] = "Bearer " + token;
 
-    const config = { method, headers }
-    if (body) config.body = JSON.stringify(body)
+    const config = { method, headers };
+    if (body) config.body = JSON.stringify(body);
 
-    const res = await fetch(API + path, config)
-    if (res.status === 204) return null
-    const data = res.headers.get('content-type')?.includes('json') ? await res.json() : null
+    const res = await fetch(API + path, config);
+    if (res.status === 204) return null;
+    const data = res.headers.get("content-type")?.includes("json")
+      ? await res.json()
+      : null;
     if (!res.ok) {
-      const msg = data?.message || data?.error || 'Payment request failed'
-      const err = new Error(msg)
-      err.status = res.status
-      throw err
+      const msg = data?.message || data?.error || "Payment request failed";
+      const err = new Error(msg);
+      err.status = res.status;
+      throw err;
     }
-    return data
+    return data;
   }
 
   /*
-   * createSubscription(planId, totalCount) — initiates the PRO subscription process.
-   *
-   * Sends a request to the payment-service to create (or return an existing) Razorpay
-   * subscription. The backend registers the plan with Razorpay's API and returns the
-   * subscription details including the razorpaySubId needed to open the payment widget.
-   *
-   * planId     — the Razorpay plan ID for the PRO tier (configured on the backend).
-   * totalCount — number of billing cycles (default 12 = 1 year of monthly payments).
-   *
-   * Returns: { id, userId, plan, status, razorpaySubId, startDate }
+   * createOrder() — creates a Razorpay Order for the one-time PRO upgrade.
+   * Returns: { id, userId, plan, status, razorpayOrderId, startDate }
    */
-  createSubscription(planId, totalCount = 12) {
-    return this.req('POST', '/payments/subscription/create', { planId, totalCount })
+  getConfig() {
+    return this.req("GET", "/payments/subscription/config");
+  }
+
+  createOrder() {
+    return this.req("POST", "/payments/subscription/create", {});
   }
 
   /*
@@ -78,7 +76,7 @@ class PaymentApiService {
    * Returns the subscription object with status (ACTIVE, CANCELLED, EXPIRED, etc.).
    */
   getSubscriptionStatus() {
-    return this.req('GET', '/payments/subscription/status')
+    return this.req("GET", "/payments/subscription/status");
   }
 
   /*
@@ -88,8 +86,8 @@ class PaymentApiService {
    * user can see their billing history on the BillingPage.
    */
   getPaymentHistory() {
-    return this.req('GET', '/payments/subscription/payments')
+    return this.req("GET", "/payments/subscription/payments");
   }
 }
 
-export const paymentApi = new PaymentApiService()
+export const paymentApi = new PaymentApiService();

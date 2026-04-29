@@ -63,6 +63,7 @@ export default function VerifyEmailPage() {
    * Starts at 60 to prevent the first resend from being immediate.
    */
   const [cooldown, setCooldown] = useState(60)
+  const [cooldownKey, setCooldownKey] = useState(0)
 
   /*
    * expiresIn — countdown for OTP expiry (5 minutes = 300 seconds).
@@ -73,19 +74,32 @@ export default function VerifyEmailPage() {
   /* Guard: if no email was passed in state, we can't show this page meaningfully */
   useEffect(() => { if (!email) navigate('/login', { replace: true }) }, [email])
 
-  /* cooldown countdown timer — ticks every second while cooldown > 0 */
+  /*
+   * Cooldown timer — single setInterval per lifecycle to avoid recreating on
+   * each tick (which breaks Playwright's page.clock.fastForward in tests).
+   * cooldownKey increments on resend to restart the interval fresh.
+   */
   useEffect(() => {
     if (cooldown <= 0) return
-    const t = setInterval(() => setCooldown(c => c - 1), 1000)
-    return () => clearInterval(t)
-  }, [cooldown])
+    const id = setInterval(() => {
+      setCooldown(c => {
+        if (c <= 1) { clearInterval(id); return 0 }
+        return c - 1
+      })
+    }, 1000)
+    return () => clearInterval(id)
+  }, [cooldownKey]) // eslint-disable-line react-hooks/exhaustive-deps
 
-  /* expiresIn countdown timer — shows when the OTP will expire */
+  /* expiresIn countdown timer — single interval on mount */
   useEffect(() => {
-    if (expiresIn <= 0) return
-    const t = setInterval(() => setExpiresIn(c => c - 1), 1000)
-    return () => clearInterval(t)
-  }, [expiresIn])
+    const id = setInterval(() => {
+      setExpiresIn(c => {
+        if (c <= 1) { clearInterval(id); return 0 }
+        return c - 1
+      })
+    }, 1000)
+    return () => clearInterval(id)
+  }, [])
 
   /*
    * verify — submits the 6-digit OTP to the backend's email verification endpoint.
@@ -94,7 +108,7 @@ export default function VerifyEmailPage() {
    * On failure, the OTP is cleared so the user can re-enter cleanly.
    */
   const verify = async () => {
-    if (otp.length !== 6) return
+    if (otp.length !== 6 || loading) return
     setError(''); setLoading(true)
     try {
       const data = await api.verifyOtp({ email, otp })
@@ -125,6 +139,7 @@ export default function VerifyEmailPage() {
     try {
       const res = await api.resendOtp(email)
       setCooldown(res?.cooldownSeconds || 60)
+      setCooldownKey(k => k + 1)
       setExpiresIn(300)
     } catch (err) { setError(err.message || 'Could not resend') }
   }
@@ -177,7 +192,7 @@ export default function VerifyEmailPage() {
       <button
         className="btn btn-primary btn-block"
         onClick={verify}
-        disabled={loading || otp.length !== 6}
+        disabled={otp.length !== 6}
         style={{ marginTop: 16 }}
       >
         {loading ? <Loader2 size={18} className="spin"/> : <ShieldCheck size={18}/>}
