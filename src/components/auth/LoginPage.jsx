@@ -69,7 +69,9 @@ import './AuthStyles.css'
  * so we must point to port 8080 explicitly. In production, both are served
  * from the same origin so we use an empty string (relative URL).
  */
-const OAUTH2_BASE = import.meta.env.DEV ? 'http://localhost:8080' : ''
+// Previous default (dev localhost, prod same-origin):
+// const OAUTH2_BASE = import.meta.env.DEV ? 'http://localhost:8080' : ''
+const OAUTH2_BASE = import.meta.env.VITE_OAUTH_BASE_URL || (import.meta.env.DEV ? 'http://localhost:8080' : '')
 
 /*
  * GoogleIcon / GithubIcon — inline SVG brand icons for the OAuth buttons.

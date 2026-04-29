@@ -33,10 +33,14 @@
  * The WS_ENDPOINT switches between local dev (direct to port 8080) and production
  * (same-origin /ws path via the API Gateway's WebSocket routing).
  */
-import { Client } from "@stomp/stompjs"
-import SockJS from "sockjs-client/dist/sockjs"
+import { Client } from "@stomp/stompjs";
+import SockJS from "sockjs-client/dist/sockjs";
 
-const WS_ENDPOINT = import.meta.env.DEV ? "http://localhost:8080/ws" : "/ws"
+// Previous default (dev localhost, prod same-origin):
+// const WS_ENDPOINT = import.meta.env.DEV ? "http://localhost:8080/ws" : "/ws"
+const WS_ENDPOINT =
+  import.meta.env.VITE_WS_URL ||
+  (import.meta.env.DEV ? "http://localhost:8080/ws" : "/ws");
 
 class WebSocketService {
   /*
@@ -55,19 +59,19 @@ class WebSocketService {
    *   _connectPromise     — ensures only one connect() call runs at a time
    */
   constructor() {
-    this.client = null
-    this.roomSubscriptions = new Map()
-    this.roomCallbacks = new Map()
-    this.presenceCallbacks = new Set()
-    this.presenceSubscriptions = []
-    this.personalCallbacks = new Map()
-    this.personalSubscriptions = new Map()
-    this.notificationCallbacks = new Map()
-    this.notificationSubscriptions = new Map()
-    this.stateListeners = new Set()
-    this.connected = false
-    this._token = null
-    this._connectPromise = null
+    this.client = null;
+    this.roomSubscriptions = new Map();
+    this.roomCallbacks = new Map();
+    this.presenceCallbacks = new Set();
+    this.presenceSubscriptions = [];
+    this.personalCallbacks = new Map();
+    this.personalSubscriptions = new Map();
+    this.notificationCallbacks = new Map();
+    this.notificationSubscriptions = new Map();
+    this.stateListeners = new Set();
+    this.connected = false;
+    this._token = null;
+    this._connectPromise = null;
   }
 
   /*
@@ -82,11 +86,11 @@ class WebSocketService {
    * resolve/reject more than once if events fire in unexpected order.
    */
   connect(token) {
-    this._token = token
-    if (this.client?.active) return this._connectPromise || Promise.resolve()
+    this._token = token;
+    if (this.client?.active) return this._connectPromise || Promise.resolve();
 
     this._connectPromise = new Promise((resolve, reject) => {
-      let settled = false
+      let settled = false;
 
       this.client = new Client({
         webSocketFactory: () => new SockJS(WS_ENDPOINT),
@@ -95,43 +99,44 @@ class WebSocketService {
         heartbeatIncoming: 10000,
         heartbeatOutgoing: 10000,
         debug: (str) => {
-          if (str.includes("CONNECT") || str.includes("ERROR")) console.log("[WS]", str)
+          if (str.includes("CONNECT") || str.includes("ERROR"))
+            console.log("[WS]", str);
         },
         onConnect: () => {
-          this.connected = true
-          this.restoreSubscriptions()
-          this.notifyState(true)
-          console.log("[WS] Connected")
+          this.connected = true;
+          this.restoreSubscriptions();
+          this.notifyState(true);
+          console.log("[WS] Connected");
           if (!settled) {
-            settled = true
-            resolve()
+            settled = true;
+            resolve();
           }
         },
         onDisconnect: () => {
-          this.connected = false
-          this.clearActiveSubscriptions()
-          this.notifyState(false)
-          console.log("[WS] Disconnected")
+          this.connected = false;
+          this.clearActiveSubscriptions();
+          this.notifyState(false);
+          console.log("[WS] Disconnected");
         },
         onWebSocketClose: () => {
-          this.connected = false
-          this.clearActiveSubscriptions()
-          this.notifyState(false)
+          this.connected = false;
+          this.clearActiveSubscriptions();
+          this.notifyState(false);
         },
         onStompError: (frame) => {
-          console.error("[WS] Error:", frame.headers?.message || "Unknown")
+          console.error("[WS] Error:", frame.headers?.message || "Unknown");
           if (!settled) {
-            settled = true
-            reject(new Error(frame.headers?.message || "WebSocket error"))
+            settled = true;
+            reject(new Error(frame.headers?.message || "WebSocket error"));
           }
         },
-      })
-      this.client.activate()
-    })
+      });
+      this.client.activate();
+    });
 
     return this._connectPromise.finally(() => {
-      this._connectPromise = null
-    })
+      this._connectPromise = null;
+    });
   }
 
   /*
@@ -141,15 +146,15 @@ class WebSocketService {
    */
   disconnect() {
     if (this.client) {
-      this.clearActiveSubscriptions()
-      this.roomCallbacks.clear()
-      this.presenceCallbacks.clear()
-      this.personalCallbacks.clear()
-      this.notificationCallbacks.clear()
-      this.client.deactivate()
-      this.connected = false
-      this.notifyState(false)
-      this.client = null
+      this.clearActiveSubscriptions();
+      this.roomCallbacks.clear();
+      this.presenceCallbacks.clear();
+      this.personalCallbacks.clear();
+      this.notificationCallbacks.clear();
+      this.client.deactivate();
+      this.connected = false;
+      this.notifyState(false);
+      this.client = null;
     }
   }
 
@@ -168,20 +173,45 @@ class WebSocketService {
    * can re-register them when the connection comes back.
    */
   subscribeToRoom(roomId, callbacks) {
-    this.roomCallbacks.set(roomId, callbacks)
-    if (!this.connected || !this.client) return
+    this.roomCallbacks.set(roomId, callbacks);
+    if (!this.connected || !this.client) return;
 
-    const existing = this.roomSubscriptions.get(roomId)
-    if (existing) existing.forEach((subscription) => subscription.unsubscribe())
+    const existing = this.roomSubscriptions.get(roomId);
+    if (existing)
+      existing.forEach((subscription) => subscription.unsubscribe());
 
-    const subs = []
-    subs.push(this.client.subscribe("/topic/room/" + roomId,                (msg) => callbacks.onMessage?.(JSON.parse(msg.body))))
-    subs.push(this.client.subscribe("/topic/room/" + roomId + "/typing",    (msg) => callbacks.onTyping?.(JSON.parse(msg.body))))
-    subs.push(this.client.subscribe("/topic/room/" + roomId + "/read",      (msg) => callbacks.onRead?.(JSON.parse(msg.body))))
-    subs.push(this.client.subscribe("/topic/room/" + roomId + "/edit",      (msg) => callbacks.onEdit?.(JSON.parse(msg.body))))
-    subs.push(this.client.subscribe("/topic/room/" + roomId + "/delete",    (msg) => callbacks.onDelete?.(JSON.parse(msg.body))))
-    subs.push(this.client.subscribe("/topic/room/" + roomId + "/reactions", (msg) => callbacks.onReaction?.(JSON.parse(msg.body))))
-    this.roomSubscriptions.set(roomId, subs)
+    const subs = [];
+    subs.push(
+      this.client.subscribe("/topic/room/" + roomId, (msg) =>
+        callbacks.onMessage?.(JSON.parse(msg.body)),
+      ),
+    );
+    subs.push(
+      this.client.subscribe("/topic/room/" + roomId + "/typing", (msg) =>
+        callbacks.onTyping?.(JSON.parse(msg.body)),
+      ),
+    );
+    subs.push(
+      this.client.subscribe("/topic/room/" + roomId + "/read", (msg) =>
+        callbacks.onRead?.(JSON.parse(msg.body)),
+      ),
+    );
+    subs.push(
+      this.client.subscribe("/topic/room/" + roomId + "/edit", (msg) =>
+        callbacks.onEdit?.(JSON.parse(msg.body)),
+      ),
+    );
+    subs.push(
+      this.client.subscribe("/topic/room/" + roomId + "/delete", (msg) =>
+        callbacks.onDelete?.(JSON.parse(msg.body)),
+      ),
+    );
+    subs.push(
+      this.client.subscribe("/topic/room/" + roomId + "/reactions", (msg) =>
+        callbacks.onReaction?.(JSON.parse(msg.body)),
+      ),
+    );
+    this.roomSubscriptions.set(roomId, subs);
   }
 
   /*
@@ -189,12 +219,12 @@ class WebSocketService {
    * Called when the user navigates away from a room or the room is deleted.
    */
   unsubscribeFromRoom(roomId) {
-    const subs = this.roomSubscriptions.get(roomId)
+    const subs = this.roomSubscriptions.get(roomId);
     if (subs) {
-      subs.forEach((subscription) => subscription.unsubscribe())
-      this.roomSubscriptions.delete(roomId)
+      subs.forEach((subscription) => subscription.unsubscribe());
+      this.roomSubscriptions.delete(roomId);
     }
-    this.roomCallbacks.delete(roomId)
+    this.roomCallbacks.delete(roomId);
   }
 
   /*
@@ -204,11 +234,13 @@ class WebSocketService {
    * uses to update the green/grey dot next to each user's name.
    */
   subscribeToPresence(callback) {
-    this.presenceCallbacks.add(callback)
+    this.presenceCallbacks.add(callback);
     if (this.connected && this.client) {
       this.presenceSubscriptions.push(
-        this.client.subscribe("/topic/presence", (msg) => callback(JSON.parse(msg.body)))
-      )
+        this.client.subscribe("/topic/presence", (msg) =>
+          callback(JSON.parse(msg.body)),
+        ),
+      );
     }
   }
 
@@ -221,25 +253,40 @@ class WebSocketService {
    * 3. /user/{id}/queue/delivery-ack  — DELIVERED acks sent when an online recipient receives a message
    */
   subscribeToPersonal(userId, callback) {
-    this.personalCallbacks.set(userId, callback)
+    this.personalCallbacks.set(userId, callback);
     if (this.connected && this.client) {
-      const existing = this.personalSubscriptions.get(userId)
-      if (existing) existing.forEach(s => s.unsubscribe())
+      const existing = this.personalSubscriptions.get(userId);
+      if (existing) existing.forEach((s) => s.unsubscribe());
 
-      const subs = []
-      subs.push(this.client.subscribe("/user/" + userId + "/queue/messages", (msg) => callback(JSON.parse(msg.body))))
-      subs.push(this.client.subscribe("/user/" + userId + "/queue/errors", (msg) => {
-        try {
-          const err = JSON.parse(msg.body)
-          if(err.reason === 'LIMIT_EXCEEDED') {
-            window.dispatchEvent(new CustomEvent('guestLimitExceeded', { detail: err }))
-          }
-        } catch(e) {}
-      }))
-      subs.push(this.client.subscribe("/user/" + userId + "/queue/delivery-ack", (msg) => {
-        try { callback({ type: 'delivery-ack', ...JSON.parse(msg.body) }) } catch(e) {}
-      }))
-      this.personalSubscriptions.set(userId, subs)
+      const subs = [];
+      subs.push(
+        this.client.subscribe("/user/" + userId + "/queue/messages", (msg) =>
+          callback(JSON.parse(msg.body)),
+        ),
+      );
+      subs.push(
+        this.client.subscribe("/user/" + userId + "/queue/errors", (msg) => {
+          try {
+            const err = JSON.parse(msg.body);
+            if (err.reason === "LIMIT_EXCEEDED") {
+              window.dispatchEvent(
+                new CustomEvent("guestLimitExceeded", { detail: err }),
+              );
+            }
+          } catch (e) {}
+        }),
+      );
+      subs.push(
+        this.client.subscribe(
+          "/user/" + userId + "/queue/delivery-ack",
+          (msg) => {
+            try {
+              callback({ type: "delivery-ack", ...JSON.parse(msg.body) });
+            } catch (e) {}
+          },
+        ),
+      );
+      this.personalSubscriptions.set(userId, subs);
     }
   }
 
@@ -250,16 +297,23 @@ class WebSocketService {
    * and notification list without needing to poll the REST API.
    */
   subscribeToNotifications(userId, callback) {
-    this.notificationCallbacks.set(userId, callback)
+    this.notificationCallbacks.set(userId, callback);
     if (this.connected && this.client) {
-      const existing = this.notificationSubscriptions.get(userId)
-      existing?.unsubscribe()
+      const existing = this.notificationSubscriptions.get(userId);
+      existing?.unsubscribe();
       this.notificationSubscriptions.set(
         userId,
-        this.client.subscribe("/user/" + userId + "/queue/notifications", (msg) => {
-          try { callback(JSON.parse(msg.body)) } catch (e) { console.error('[WS] Notification parse error', e) }
-        })
-      )
+        this.client.subscribe(
+          "/user/" + userId + "/queue/notifications",
+          (msg) => {
+            try {
+              callback(JSON.parse(msg.body));
+            } catch (e) {
+              console.error("[WS] Notification parse error", e);
+            }
+          },
+        ),
+      );
     }
   }
 
@@ -269,8 +323,8 @@ class WebSocketService {
    * Used by ChatLayout to show a "reconnecting..." indicator in the UI.
    */
   onStateChange(listener) {
-    this.stateListeners.add(listener)
-    return () => this.stateListeners.delete(listener)
+    this.stateListeners.add(listener);
+    return () => this.stateListeners.delete(listener);
   }
 
   /*
@@ -281,7 +335,7 @@ class WebSocketService {
    * /topic/room/{roomId}. Returns false if not connected so the UI can show an error.
    */
   sendMessage(roomId, content, type, replyTo, mediaUrl) {
-    if (!this.connected) return false
+    if (!this.connected) return false;
     this.client.publish({
       destination: "/app/chat.send",
       body: JSON.stringify({
@@ -291,8 +345,8 @@ class WebSocketService {
         replyToMessageId: replyTo || null,
         mediaUrl: mediaUrl || null,
       }),
-    })
-    return true
+    });
+    return true;
   }
 
   /*
@@ -302,9 +356,12 @@ class WebSocketService {
    * so others see the "John is typing..." animation in real time.
    */
   sendTyping(roomId, isTyping) {
-    if (!this.connected) return false
-    this.client.publish({ destination: "/app/chat.typing", body: JSON.stringify({ roomId, typing: isTyping }) })
-    return true
+    if (!this.connected) return false;
+    this.client.publish({
+      destination: "/app/chat.typing",
+      body: JSON.stringify({ roomId, typing: isTyping }),
+    });
+    return true;
   }
 
   /*
@@ -313,9 +370,12 @@ class WebSocketService {
    * broadcasts to room members so they can see double-tick / read indicators.
    */
   sendReadReceipt(roomId, upToMessageId) {
-    if (!this.connected) return false
-    this.client.publish({ destination: "/app/chat.read", body: JSON.stringify({ roomId, upToMessageId }) })
-    return true
+    if (!this.connected) return false;
+    this.client.publish({
+      destination: "/app/chat.read",
+      body: JSON.stringify({ roomId, upToMessageId }),
+    });
+    return true;
   }
 
   /*
@@ -324,12 +384,12 @@ class WebSocketService {
    * broadcasts to /topic/room/{roomId}/reactions so all members see the change instantly.
    */
   sendReaction(roomId, messageId, emoji, action) {
-    if (!this.connected) return false
+    if (!this.connected) return false;
     this.client.publish({
       destination: "/app/chat.react",
       body: JSON.stringify({ roomId, messageId, emoji, action }),
-    })
-    return true
+    });
+    return true;
   }
 
   /*
@@ -338,12 +398,12 @@ class WebSocketService {
    * room members on /topic/room/{roomId}/edit so their UI updates in real time.
    */
   sendEdit(roomId, messageId, newContent) {
-    if (!this.connected) return false
+    if (!this.connected) return false;
     this.client.publish({
       destination: "/app/chat.edit",
       body: JSON.stringify({ roomId, messageId, newContent }),
-    })
-    return true
+    });
+    return true;
   }
 
   /*
@@ -352,12 +412,12 @@ class WebSocketService {
    * message list immediately shows "This message was deleted."
    */
   sendDelete(roomId, messageId) {
-    if (!this.connected) return false
+    if (!this.connected) return false;
     this.client.publish({
       destination: "/app/chat.delete",
       body: JSON.stringify({ roomId, messageId }),
-    })
-    return true
+    });
+    return true;
   }
 
   /*
@@ -370,45 +430,69 @@ class WebSocketService {
    */
   restoreSubscriptions() {
     for (const [roomId, callbacks] of this.roomCallbacks.entries()) {
-      this.subscribeToRoom(roomId, callbacks)
+      this.subscribeToRoom(roomId, callbacks);
     }
 
-    this.presenceSubscriptions = []
+    this.presenceSubscriptions = [];
     for (const callback of this.presenceCallbacks) {
       this.presenceSubscriptions.push(
-        this.client.subscribe("/topic/presence", (msg) => callback(JSON.parse(msg.body)))
-      )
+        this.client.subscribe("/topic/presence", (msg) =>
+          callback(JSON.parse(msg.body)),
+        ),
+      );
     }
 
     for (const [userId, callback] of this.personalCallbacks.entries()) {
-      const existing = this.personalSubscriptions.get(userId)
-      if (existing) existing.forEach(s => s.unsubscribe())
+      const existing = this.personalSubscriptions.get(userId);
+      if (existing) existing.forEach((s) => s.unsubscribe());
 
-      const subs = []
-      subs.push(this.client.subscribe("/user/" + userId + "/queue/messages", (msg) => callback(JSON.parse(msg.body))))
-      subs.push(this.client.subscribe("/user/" + userId + "/queue/errors", (msg) => {
-        try {
-          const err = JSON.parse(msg.body)
-          if(err.reason === 'LIMIT_EXCEEDED') {
-            window.dispatchEvent(new CustomEvent('guestLimitExceeded', { detail: err }))
-          }
-        } catch(e) {}
-      }))
-      subs.push(this.client.subscribe("/user/" + userId + "/queue/delivery-ack", (msg) => {
-        try { callback({ type: 'delivery-ack', ...JSON.parse(msg.body) }) } catch(e) {}
-      }))
-      this.personalSubscriptions.set(userId, subs)
+      const subs = [];
+      subs.push(
+        this.client.subscribe("/user/" + userId + "/queue/messages", (msg) =>
+          callback(JSON.parse(msg.body)),
+        ),
+      );
+      subs.push(
+        this.client.subscribe("/user/" + userId + "/queue/errors", (msg) => {
+          try {
+            const err = JSON.parse(msg.body);
+            if (err.reason === "LIMIT_EXCEEDED") {
+              window.dispatchEvent(
+                new CustomEvent("guestLimitExceeded", { detail: err }),
+              );
+            }
+          } catch (e) {}
+        }),
+      );
+      subs.push(
+        this.client.subscribe(
+          "/user/" + userId + "/queue/delivery-ack",
+          (msg) => {
+            try {
+              callback({ type: "delivery-ack", ...JSON.parse(msg.body) });
+            } catch (e) {}
+          },
+        ),
+      );
+      this.personalSubscriptions.set(userId, subs);
     }
 
     for (const [userId, callback] of this.notificationCallbacks.entries()) {
-      const existing = this.notificationSubscriptions.get(userId)
-      existing?.unsubscribe()
+      const existing = this.notificationSubscriptions.get(userId);
+      existing?.unsubscribe();
       this.notificationSubscriptions.set(
         userId,
-        this.client.subscribe("/user/" + userId + "/queue/notifications", (msg) => {
-          try { callback(JSON.parse(msg.body)) } catch (e) { console.error('[WS] Notification parse error', e) }
-        })
-      )
+        this.client.subscribe(
+          "/user/" + userId + "/queue/notifications",
+          (msg) => {
+            try {
+              callback(JSON.parse(msg.body));
+            } catch (e) {
+              console.error("[WS] Notification parse error", e);
+            }
+          },
+        ),
+      );
     }
   }
 
@@ -418,14 +502,22 @@ class WebSocketService {
    * Does NOT clear the callback maps (those are preserved for restore).
    */
   clearActiveSubscriptions() {
-    this.roomSubscriptions.forEach((subs) => subs.forEach((subscription) => subscription.unsubscribe()))
-    this.roomSubscriptions.clear()
-    this.presenceSubscriptions.forEach((subscription) => subscription.unsubscribe())
-    this.presenceSubscriptions = []
-    this.personalSubscriptions.forEach((subs) => subs.forEach((subscription) => subscription.unsubscribe()))
-    this.personalSubscriptions.clear()
-    this.notificationSubscriptions.forEach((subscription) => subscription.unsubscribe())
-    this.notificationSubscriptions.clear()
+    this.roomSubscriptions.forEach((subs) =>
+      subs.forEach((subscription) => subscription.unsubscribe()),
+    );
+    this.roomSubscriptions.clear();
+    this.presenceSubscriptions.forEach((subscription) =>
+      subscription.unsubscribe(),
+    );
+    this.presenceSubscriptions = [];
+    this.personalSubscriptions.forEach((subs) =>
+      subs.forEach((subscription) => subscription.unsubscribe()),
+    );
+    this.personalSubscriptions.clear();
+    this.notificationSubscriptions.forEach((subscription) =>
+      subscription.unsubscribe(),
+    );
+    this.notificationSubscriptions.clear();
   }
 
   /*
@@ -434,8 +526,8 @@ class WebSocketService {
    * This is how ChatLayout knows to show or hide the "reconnecting" banner.
    */
   notifyState(connected) {
-    this.stateListeners.forEach((listener) => listener(connected))
+    this.stateListeners.forEach((listener) => listener(connected));
   }
 }
 
-export const ws = new WebSocketService()
+export const ws = new WebSocketService();
