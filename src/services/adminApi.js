@@ -96,6 +96,14 @@ class AdminApiService {
   getAuditLogs(page = 0, size = 50) {
     return this.req('GET', `/auth/admin/audit?page=${page}&size=${size}`)
   }
+
+  changeRole(userId, role) {
+    return this.req('PUT', `/auth/admin/users/${userId}/role`, { role })
+  }
+
+  getOnlineCount() {
+    return this.req('GET', '/presence/online/count')
+  }
 }
 
 export const adminApi = new AdminApiService()
