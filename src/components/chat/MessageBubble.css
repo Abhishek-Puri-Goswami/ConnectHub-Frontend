@@ -177,9 +177,17 @@
 
 /* ─── Options trigger & dropdown ─── */
 .mb-opts {
-  position: relative;
+  /* Float outside the flex flow so the bubble never shifts when this appears.
+     Positioned relative to .mb-bubble-row (which has position:relative). */
+  position: absolute;
+  top: 50%; transform: translateY(-50%);
+  left: 100%; margin-left: 4px;   /* 'other' messages: just right of the bubble */
   display: flex; align-items: center;
-  flex-shrink: 0;
+  z-index: 10;
+}
+.mb-row.own .mb-opts {
+  left: auto; margin-left: 0;
+  right: 100%; margin-right: 4px; /* 'own' messages: just left of the bubble */
 }
 .mb-opt-trigger {
   width: 28px; height: 28px;
@@ -227,6 +235,41 @@
 .mb-dropdown button:hover { background: var(--surface-3); }
 .mb-dropdown button.danger { color: var(--danger); }
 .mb-dropdown button.danger:hover { background: var(--danger-soft); }
+
+/* ─── Delete confirmation sub-menu ─── */
+.mb-delete-confirm { min-width: 180px; }
+.mb-delete-confirm-title {
+  padding: 8px 12px 4px;
+  font-size: 11.5px; font-weight: 700;
+  color: var(--text-muted);
+  text-transform: uppercase; letter-spacing: 0.04em;
+}
+.mb-delete-cancel {
+  color: var(--text-muted) !important;
+  border-top: 1px solid var(--border);
+  margin-top: 2px;
+}
+.mb-delete-cancel:hover { color: var(--text) !important; }
+
+/* ─── Deleted message bubble ─── */
+.mb-bubble-deleted {
+  background: var(--surface-3) !important;
+  box-shadow: none !important;
+  border: 1px dashed var(--border-strong) !important;
+  padding: 8px 14px !important;
+}
+.mb-bubble-deleted.own { background: rgba(255,142,114,0.08) !important; }
+.mb-deleted-text {
+  font-size: 13px;
+  font-style: italic;
+  color: var(--text-muted);
+  display: flex; align-items: center; gap: 6px;
+}
+.mb-deleted-text::before {
+  content: '🚫';
+  font-style: normal;
+  font-size: 12px;
+}
 
 /* ─── Edit box ─── */
 .mb-edit-box {

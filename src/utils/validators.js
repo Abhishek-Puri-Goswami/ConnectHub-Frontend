@@ -42,7 +42,7 @@ export const PASSWORD_SYMBOL = /[@$!%*?&#^()\-_+=~`[\]{}|;:'",.<>/?\\]/
  */
 export const capitalizeFullName = (s) => {
   if (!s) return ''
-  return s.charAt(0).toUpperCase() + s.slice(1)
+  return s.split(' ').map(w => w ? w[0].toUpperCase() + w.slice(1) : w).join(' ')
 }
 
 /*
@@ -161,7 +161,7 @@ export const maskEmail = (e) => {
   if (!e || !e.includes('@')) return e || ''
   const [name, domain] = e.split('@')
   if (!name) return e
-  return name[0] + '•••@' + domain
+  return name.slice(0, 2) + '***@' + domain
 }
 
 /*
