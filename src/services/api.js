@@ -26,21 +26,23 @@
  * which forwards requests to the correct microservice based on the path prefix
  * (e.g. /auth/* → auth-service, /rooms/* → room-service, etc.).
  */
-import { useToastStore } from '../store/toastStore';
+import { useToastStore } from "../store/toastStore";
 
-const API = "/api/v1"
+// Previous default (same-origin gateway): const API = "/api/v1"
+const API = import.meta.env.VITE_API_BASE_URL || "/api/v1";
 
 // Helper to identify microservice based on API routing prefix
 function getServiceName(path) {
-  if (path.startsWith('/auth')) return 'Authentication Service';
-  if (path.startsWith('/rooms')) return 'Room Service';
-  if (path.startsWith('/messages')) return 'Message Service';
-  if (path.startsWith('/users')) return 'User Administration';
-  if (path.startsWith('/billing') || path.startsWith('/payments')) return 'Payment Service';
-  if (path.startsWith('/presence')) return 'Presence Service';
-  if (path.startsWith('/media')) return 'Media Provider';
-  if (path.startsWith('/notifications')) return 'Notification Service';
-  return 'Backend Service';
+  if (path.startsWith("/auth")) return "Authentication Service";
+  if (path.startsWith("/rooms")) return "Room Service";
+  if (path.startsWith("/messages")) return "Message Service";
+  if (path.startsWith("/users")) return "User Administration";
+  if (path.startsWith("/billing") || path.startsWith("/payments"))
+    return "Payment Service";
+  if (path.startsWith("/presence")) return "Presence Service";
+  if (path.startsWith("/media")) return "Media Provider";
+  if (path.startsWith("/notifications")) return "Notification Service";
+  return "Backend Service";
 }
 
 class ApiService {
@@ -58,40 +60,44 @@ class ApiService {
    *   session is cleared and the user is redirected to the login page.
    */
   async req(method, path, body, auth = true, quiet = false) {
-    const headers = { "Content-Type": "application/json" }
-    const token = localStorage.getItem("accessToken")
-    if (auth && token) headers["Authorization"] = "Bearer " + token
+    const headers = { "Content-Type": "application/json" };
+    const token = localStorage.getItem("accessToken");
+    if (auth && token) headers["Authorization"] = "Bearer " + token;
 
-    const config = { method, headers }
-    if (body) config.body = JSON.stringify(body)
+    const config = { method, headers };
+    if (body) config.body = JSON.stringify(body);
 
-    const toast = (msg, variant) => { if (!quiet) useToastStore.getState().addToast(msg, variant) }
+    const toast = (msg, variant) => {
+      if (!quiet) useToastStore.getState().addToast(msg, variant);
+    };
 
     let res;
     try {
-      res = await fetch(API + path, config)
+      res = await fetch(API + path, config);
     } catch (err) {
-      toast("API Gateway or Network is unreachable.", 'danger');
+      toast("API Gateway or Network is unreachable.", "danger");
       throw err;
     }
 
     if (res.status === 401 && auth) {
-      const ok = await this.tryRefresh()
-      if (ok) return this.req(method, path, body, auth, quiet)
+      const ok = await this.tryRefresh();
+      if (ok) return this.req(method, path, body, auth, quiet);
 
-      toast("Your session has expired. Please log in again.", 'warning');
-      localStorage.clear()
-      window.location.href = "/login"
-      throw new Error("Session expired")
+      toast("Your session has expired. Please log in again.", "warning");
+      localStorage.clear();
+      window.location.href = "/login";
+      throw new Error("Session expired");
     }
 
-    if (res.status === 204) return null
-    const data = res.headers.get('content-type')?.includes('json') ? await res.json() : null
+    if (res.status === 204) return null;
+    const data = res.headers.get("content-type")?.includes("json")
+      ? await res.json()
+      : null;
     if (!res.ok) {
       if (res.status === 502 || res.status === 503 || res.status === 504) {
         const serviceName = getServiceName(path);
         const errorMsg = `${serviceName} is currently unavailable. Please try again later.`;
-        toast(errorMsg, 'danger');
+        toast(errorMsg, "danger");
         throw new Error(errorMsg);
       }
 
@@ -100,11 +106,15 @@ class ApiService {
        *   ApiResponse { success, message }   — our custom backend format
        *   Spring default { error, message, path } — built-in error format
        */
-      const msg = data?.message || data?.error || (Array.isArray(data?.errors) ? data.errors.join(', ') : null) || 'Request failed'
-      toast(msg, 'danger');
-      throw new Error(msg)
+      const msg =
+        data?.message ||
+        data?.error ||
+        (Array.isArray(data?.errors) ? data.errors.join(", ") : null) ||
+        "Request failed";
+      toast(msg, "danger");
+      throw new Error(msg);
     }
-    return data
+    return data;
   }
 
   /*
@@ -119,27 +129,27 @@ class ApiService {
    * Returns true on success, false on failure.
    */
   async refreshSession() {
-    const rt = localStorage.getItem("refreshToken")
-    if (!rt) return false
+    const rt = localStorage.getItem("refreshToken");
+    if (!rt) return false;
     try {
       const res = await fetch(API + "/auth/refresh", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ refreshToken: rt }),
-      })
-      if (!res.ok) return false
-      const data = await res.json()
-      localStorage.setItem("accessToken", data.accessToken)
-      localStorage.setItem("refreshToken", data.refreshToken)
-      if (data.user) localStorage.setItem("user", JSON.stringify(data.user))
-      return true
+      });
+      if (!res.ok) return false;
+      const data = await res.json();
+      localStorage.setItem("accessToken", data.accessToken);
+      localStorage.setItem("refreshToken", data.refreshToken);
+      if (data.user) localStorage.setItem("user", JSON.stringify(data.user));
+      return true;
     } catch {
-      return false
+      return false;
     }
   }
 
   async tryRefresh() {
-    return this.refreshSession()
+    return this.refreshSession();
   }
 
   /*
@@ -152,9 +162,15 @@ class ApiService {
    *                  The backend marks the account as verified and returns tokens.
    * resendOtp(email) — if the OTP email was never received, this triggers a resend.
    */
-  register(d) { return this.req("POST", "/auth/register", d, false) }
-  verifyOtp(d) { return this.req("POST", "/auth/verify-registration-otp", d, false) }
-  resendOtp(email) { return this.req("POST", "/auth/resend-registration-otp", { email }, false) }
+  register(d) {
+    return this.req("POST", "/auth/register", d, false);
+  }
+  verifyOtp(d) {
+    return this.req("POST", "/auth/verify-registration-otp", d, false);
+  }
+  resendOtp(email) {
+    return this.req("POST", "/auth/resend-registration-otp", { email }, false);
+  }
 
   /*
    * Phone OTP methods — used when a user wants to register or log in using
@@ -165,10 +181,15 @@ class ApiService {
    *   the backend returns access and refresh tokens just like a normal login.
    */
   requestPhoneOtp(phoneNumber) {
-    return this.req("POST", "/auth/phone/request-otp", { phoneNumber }, false)
+    return this.req("POST", "/auth/phone/request-otp", { phoneNumber }, false);
   }
   verifyPhoneOtp(phoneNumber, otp) {
-    return this.req("POST", "/auth/phone/verify-otp", { phoneNumber, otp }, false)
+    return this.req(
+      "POST",
+      "/auth/phone/verify-otp",
+      { phoneNumber, otp },
+      false,
+    );
   }
 
   /*
@@ -185,21 +206,40 @@ class ApiService {
    *
    * All login methods use auth=false because there is no token yet.
    */
-  login(d) { return this.req("POST", "/auth/login", d, false) }
-  loginAsGuest() { return this.req("POST", "/auth/guest", null, false) }
+  login(d) {
+    return this.req("POST", "/auth/login", d, false);
+  }
+  loginAsGuest() {
+    return this.req("POST", "/auth/guest", null, false);
+  }
 
   requestEmailLoginOtp(email) {
-    return this.req("POST", "/auth/login/email/request-otp", { email }, false)
+    return this.req("POST", "/auth/login/email/request-otp", { email }, false);
   }
   loginWithEmailOtp(email, otp) {
-    return this.req("POST", "/auth/login/email/verify-otp", { email, otp }, false)
+    return this.req(
+      "POST",
+      "/auth/login/email/verify-otp",
+      { email, otp },
+      false,
+    );
   }
 
   requestPhoneLoginOtp(phoneNumber) {
-    return this.req("POST", "/auth/login/phone/request-otp", { phoneNumber }, false)
+    return this.req(
+      "POST",
+      "/auth/login/phone/request-otp",
+      { phoneNumber },
+      false,
+    );
   }
   loginWithPhoneOtp(phoneNumber, otp) {
-    return this.req("POST", "/auth/login/phone/verify-otp", { phoneNumber, otp }, false)
+    return this.req(
+      "POST",
+      "/auth/login/phone/verify-otp",
+      { phoneNumber, otp },
+      false,
+    );
   }
 
   /*
@@ -212,10 +252,18 @@ class ApiService {
    * verifyResetOtp()   — validates the OTP from the forgot-password email.
    * resetPassword()    — submits the new password after OTP is verified.
    */
-  logout() { return this.req("POST", "/auth/logout") }
-  forgotPassword(email) { return this.req("POST", "/auth/forgot-password", { email }, false) }
-  verifyResetOtp(d) { return this.req("POST", "/auth/verify-reset-otp", d, false) }
-  resetPassword(d) { return this.req("POST", "/auth/reset-password", d, false) }
+  logout() {
+    return this.req("POST", "/auth/logout");
+  }
+  forgotPassword(email) {
+    return this.req("POST", "/auth/forgot-password", { email }, false);
+  }
+  verifyResetOtp(d) {
+    return this.req("POST", "/auth/verify-reset-otp", d, false);
+  }
+  resetPassword(d) {
+    return this.req("POST", "/auth/reset-password", d, false);
+  }
 
   /*
    * User profile methods — all go to the auth-service via /auth/* path.
@@ -230,13 +278,32 @@ class ApiService {
    * getUsersByIds(ids)       — batch-fetches multiple user profiles at once, used
    *                           to enrich room member lists with names/avatars.
    */
-  getProfile(id) { return this.req("GET", "/auth/profile/" + id) }
-  updateProfile(id, d) { return this.req("PUT", "/auth/profile/" + id, d) }
-  changePassword(id, d) { return this.req("PUT", "/auth/password/" + id, d) }
-  searchUsers(q) { return this.req("GET", "/auth/search?q=" + encodeURIComponent(q)) }
-  updateStatus(id, status) { return this.req("PUT", "/auth/status/" + id, { status }) }
-  checkUsername(username) { return this.req("GET", "/auth/search?q=" + encodeURIComponent(username), null, true) }
-  getUsersByIds(ids) { return this.req("POST", "/auth/users/batch", ids) }
+  getProfile(id) {
+    return this.req("GET", "/auth/profile/" + id);
+  }
+  updateProfile(id, d) {
+    return this.req("PUT", "/auth/profile/" + id, d);
+  }
+  changePassword(id, d) {
+    return this.req("PUT", "/auth/password/" + id, d);
+  }
+  searchUsers(q) {
+    return this.req("GET", "/auth/search?q=" + encodeURIComponent(q));
+  }
+  updateStatus(id, status) {
+    return this.req("PUT", "/auth/status/" + id, { status });
+  }
+  checkUsername(username) {
+    return this.req(
+      "GET",
+      "/auth/search?q=" + encodeURIComponent(username),
+      null,
+      true,
+    );
+  }
+  getUsersByIds(ids) {
+    return this.req("POST", "/auth/users/batch", ids);
+  }
 
   /*
    * Room (channel/DM) methods — all routed to the room-service via /rooms/* path.
@@ -256,21 +323,56 @@ class ApiService {
    * checkMembership(rid, uid)  — checks if a specific user is in the room (used by admin).
    * getAllRooms()               — admin-only: fetches every room in the system.
    */
-  createRoom(d) { return this.req("POST", "/rooms", d) }
-  getUserRooms(uid) { return this.req("GET", "/rooms/user/" + uid) }
-  getRoom(id) { return this.req("GET", "/rooms/" + id) }
-  getRoomMembers(id) { return this.req("GET", "/rooms/" + id + "/members") }
-  addMember(rid, uid) { return this.req("POST", "/rooms/" + rid + "/members/" + uid) }
-  removeMember(rid, uid) { return this.req("DELETE", "/rooms/" + rid + "/members/" + uid) }
-  updateRoom(id, d) { return this.req("PUT", "/rooms/" + id, d) }
-  deleteRoom(id) { return this.req("DELETE", "/rooms/" + id) }
-  updateMemberRole(rid, uid, role) { return this.req("PUT", "/rooms/" + rid + "/members/" + uid + "/role", { role }) }
-  muteMember(rid, uid, m) { return this.req("PUT", "/rooms/" + rid + "/members/" + uid + "/mute?muted=" + m) }
-  pinMessage(rid, mid) { return this.req("PUT", "/rooms/" + rid + "/pin/" + mid) }
-  unpinMessage(rid) { return this.req("DELETE", "/rooms/" + rid + "/pin") }
-  markRoomRead(rid, uid) { return this.req("PUT", "/rooms/" + rid + "/read/" + uid) }
-  checkMembership(rid, uid) { return this.req("GET", "/rooms/" + rid + "/members/" + uid + "/check") }
-  getAllRooms() { return this.req("GET", "/rooms") }
+  createRoom(d) {
+    return this.req("POST", "/rooms", d);
+  }
+  getUserRooms(uid) {
+    return this.req("GET", "/rooms/user/" + uid);
+  }
+  getRoom(id) {
+    return this.req("GET", "/rooms/" + id);
+  }
+  getRoomMembers(id) {
+    return this.req("GET", "/rooms/" + id + "/members");
+  }
+  addMember(rid, uid) {
+    return this.req("POST", "/rooms/" + rid + "/members/" + uid);
+  }
+  removeMember(rid, uid) {
+    return this.req("DELETE", "/rooms/" + rid + "/members/" + uid);
+  }
+  updateRoom(id, d) {
+    return this.req("PUT", "/rooms/" + id, d);
+  }
+  deleteRoom(id) {
+    return this.req("DELETE", "/rooms/" + id);
+  }
+  updateMemberRole(rid, uid, role) {
+    return this.req("PUT", "/rooms/" + rid + "/members/" + uid + "/role", {
+      role,
+    });
+  }
+  muteMember(rid, uid, m) {
+    return this.req(
+      "PUT",
+      "/rooms/" + rid + "/members/" + uid + "/mute?muted=" + m,
+    );
+  }
+  pinMessage(rid, mid) {
+    return this.req("PUT", "/rooms/" + rid + "/pin/" + mid);
+  }
+  unpinMessage(rid) {
+    return this.req("DELETE", "/rooms/" + rid + "/pin");
+  }
+  markRoomRead(rid, uid) {
+    return this.req("PUT", "/rooms/" + rid + "/read/" + uid);
+  }
+  checkMembership(rid, uid) {
+    return this.req("GET", "/rooms/" + rid + "/members/" + uid + "/check");
+  }
+  getAllRooms() {
+    return this.req("GET", "/rooms");
+  }
 
   /*
    * Message methods — routed to the message-service via /messages/* path.
@@ -289,17 +391,37 @@ class ApiService {
    * clearHistory(rid)        — admin: wipes all messages in a room at once.
    */
   getMessages(roomId, before, limit = 50) {
-    let u = "/messages/room/" + roomId + "?limit=" + limit
-    if (before) u += "&before=" + encodeURIComponent(before)
-    return this.req("GET", u)
+    let u = "/messages/room/" + roomId + "?limit=" + limit;
+    if (before) u += "&before=" + encodeURIComponent(before);
+    return this.req("GET", u);
   }
-  editMessage(id, content) { return this.req("PUT", "/messages/" + id, { content }) }
-  deleteMessage(id) { return this.req("DELETE", "/messages/" + id) }
-  searchMessages(rid, kw) { return this.req("GET", "/messages/room/" + rid + "/search?keyword=" + encodeURIComponent(kw)) }
-  addReaction(mid, emoji) { return this.req("POST", "/messages/" + mid + "/reactions", { emoji }) }
-  removeReaction(mid, emoji) { return this.req("DELETE", "/messages/" + mid + "/reactions?emoji=" + encodeURIComponent(emoji)) }
-  getReactions(mid) { return this.req("GET", "/messages/" + mid + "/reactions") }
-  clearHistory(rid) { return this.req("DELETE", "/messages/room/" + rid + "/clear") }
+  editMessage(id, content) {
+    return this.req("PUT", "/messages/" + id, { content });
+  }
+  deleteMessage(id) {
+    return this.req("DELETE", "/messages/" + id);
+  }
+  searchMessages(rid, kw) {
+    return this.req(
+      "GET",
+      "/messages/room/" + rid + "/search?keyword=" + encodeURIComponent(kw),
+    );
+  }
+  addReaction(mid, emoji) {
+    return this.req("POST", "/messages/" + mid + "/reactions", { emoji });
+  }
+  removeReaction(mid, emoji) {
+    return this.req(
+      "DELETE",
+      "/messages/" + mid + "/reactions?emoji=" + encodeURIComponent(emoji),
+    );
+  }
+  getReactions(mid) {
+    return this.req("GET", "/messages/" + mid + "/reactions");
+  }
+  clearHistory(rid) {
+    return this.req("DELETE", "/messages/room/" + rid + "/clear");
+  }
 
   /*
    * uploadFile(file, roomId) — uploads a file (image, video, document) to the
@@ -315,29 +437,31 @@ class ApiService {
    *   used to populate the Media Gallery panel.
    */
   async uploadFile(file, roomId) {
-    const fd = new FormData()
-    fd.append("file", file)
-    fd.append("roomId", roomId)
-    const token = localStorage.getItem("accessToken")
+    const fd = new FormData();
+    fd.append("file", file);
+    fd.append("roomId", roomId);
+    const token = localStorage.getItem("accessToken");
     const res = await fetch(API + "/media/upload", {
       method: "POST",
       headers: token ? { Authorization: "Bearer " + token } : {},
       body: fd,
-    })
+    });
     if (!res.ok) {
-      const raw = await res.text()
-      let errText = "HTTP " + res.status
+      const raw = await res.text();
+      let errText = "HTTP " + res.status;
       try {
-        const errJson = JSON.parse(raw)
-        errText = errJson.message || errJson.error || raw || errText
+        const errJson = JSON.parse(raw);
+        errText = errJson.message || errJson.error || raw || errText;
       } catch (e) {
-        if (raw) errText += ": " + raw
+        if (raw) errText += ": " + raw;
       }
-      throw new Error(errText)
+      throw new Error(errText);
     }
-    return res.json()
+    return res.json();
   }
-  getRoomMedia(rid) { return this.req("GET", "/media/room/" + rid) }
+  getRoomMedia(rid) {
+    return this.req("GET", "/media/room/" + rid);
+  }
 
   /*
    * Notification methods — routed to the notification-service via /notifications/* path.
@@ -351,12 +475,30 @@ class ApiService {
    *                            the WebSocket service in Redis, used to show unread
    *                            badges on room names in the sidebar.
    */
-  getNotifications(uid) { return this.req("GET", "/notifications/user/" + uid) }
-  markNotifRead(id) { return this.req("PUT", "/notifications/" + id + "/read") }
-  markAllNotifsRead(uid) { return this.req("PUT", "/notifications/user/" + uid + "/read-all") }
-  getUnreadCount(uid) { return this.req("GET", "/notifications/user/" + uid + "/unread-count") }
-  getWsUnreadCounts(uid) { return this.req("GET", "/ws/unread/" + uid) }
-  resetWsUnreadCount(uid, rid) { return this.req("DELETE", "/ws/unread/" + uid + "?roomId=" + encodeURIComponent(rid), null, true, true) }
+  getNotifications(uid) {
+    return this.req("GET", "/notifications/user/" + uid);
+  }
+  markNotifRead(id) {
+    return this.req("PUT", "/notifications/" + id + "/read");
+  }
+  markAllNotifsRead(uid) {
+    return this.req("PUT", "/notifications/user/" + uid + "/read-all");
+  }
+  getUnreadCount(uid) {
+    return this.req("GET", "/notifications/user/" + uid + "/unread-count");
+  }
+  getWsUnreadCounts(uid) {
+    return this.req("GET", "/ws/unread/" + uid);
+  }
+  resetWsUnreadCount(uid, rid) {
+    return this.req(
+      "DELETE",
+      "/ws/unread/" + uid + "?roomId=" + encodeURIComponent(rid),
+      null,
+      true,
+      true,
+    );
+  }
 
   /*
    * Presence methods — routed to the presence-service via /presence/* path.
@@ -373,11 +515,24 @@ class ApiService {
    * getBulkPresence(ids) — checks online status for multiple users at once (used in
    *                        the sidebar and member list to show green/grey dot indicators).
    */
-  ping(uid) { return this.req("POST", "/presence/ping/" + uid) }
-  setOnline(uid) { return this.req("POST", "/presence/online/" + uid, { deviceType: 'WEB', sessionId: 'browser' }) }
-  setOffline(uid) { return this.req("POST", "/presence/offline/" + uid) }
-  getPresence(uid) { return this.req("GET", "/presence/" + uid) }
-  getBulkPresence(ids) { return this.req("POST", "/presence/bulk", ids) }
+  ping(uid) {
+    return this.req("POST", "/presence/ping/" + uid);
+  }
+  setOnline(uid) {
+    return this.req("POST", "/presence/online/" + uid, {
+      deviceType: "WEB",
+      sessionId: "browser",
+    });
+  }
+  setOffline(uid) {
+    return this.req("POST", "/presence/offline/" + uid);
+  }
+  getPresence(uid) {
+    return this.req("GET", "/presence/" + uid);
+  }
+  getBulkPresence(ids) {
+    return this.req("POST", "/presence/bulk", ids);
+  }
 }
 
-export const api = new ApiService()
+export const api = new ApiService();
