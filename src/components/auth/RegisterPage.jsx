@@ -121,7 +121,7 @@ export default function RegisterPage() {
    * First marks all fields as touched so any remaining errors become visible.
    * Then calls the register API with the cleaned form values.
   * Phone is required and sent with +91 prefix for India.
-   * On success, navigates to /verify-email with the email in router state.
+   * On success, navigates to /verify-email with email + phone in router state.
    * On failure, shows a specific message for duplicate email/username.
    */
   const handleSubmit = async (e) => {
@@ -137,7 +137,7 @@ export default function RegisterPage() {
         phoneNumber: form.phoneNumber ? '+91' + form.phoneNumber : undefined,
         password: form.password,
       })
-      navigate('/verify-email', { state: { email: form.email.trim() } })
+      navigate('/verify-email', { state: { email: form.email.trim(), phone: form.phoneNumber ? '+91' + form.phoneNumber : undefined } })
     } catch (err) {
       const msg = err.message || 'Registration failed'
       if (msg.toLowerCase().includes('email already')) {

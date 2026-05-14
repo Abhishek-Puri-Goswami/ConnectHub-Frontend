@@ -33,9 +33,9 @@
 .sidebar-container {
   position: relative;
   z-index: 2;
-  width: 340px;
+  width: 272px;
   flex-shrink: 0;
-  padding: 16px 0 16px 16px;
+  padding: 12px 0 12px 12px;
   display: flex;
 }
 
@@ -45,7 +45,7 @@
   z-index: 2;
   flex: 1;
   min-width: 0;
-  padding: 16px;
+  padding: 12px;
   display: flex;
 }
 
@@ -71,4 +71,19 @@
   .sidebar-container.open { transform: translateX(0); }
   .sidebar-overlay { display: block; }
   .chat-container { padding: 12px; }
+}
+
+@media (max-width: 480px) {
+  /* Use safe-area-aware padding on phones with notches */
+  .chat-container {
+    padding: 8px;
+    padding-bottom: max(8px, env(safe-area-inset-bottom));
+  }
+  /* Make decorative blobs cheaper to render on mobile */
+  .layout-blob { display: none; }
+}
+
+@media (max-width: 360px) {
+  .sidebar-container { width: 100vw; }
+  .chat-container { padding: 6px; }
 }

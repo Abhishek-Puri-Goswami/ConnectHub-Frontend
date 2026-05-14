@@ -17,12 +17,13 @@ export default function SuspendedPage() {
       alignItems: 'center',
       justifyContent: 'center',
       background: 'var(--bg)',
-      padding: '24px',
+      padding: '16px',
+      overflowY: 'auto',
     }}>
       <div style={{
         background: 'var(--surface)',
         borderRadius: '20px',
-        padding: '48px 40px',
+        padding: 'clamp(24px, 6vw, 48px) clamp(18px, 5vw, 40px)',
         maxWidth: '440px',
         width: '100%',
         textAlign: 'center',

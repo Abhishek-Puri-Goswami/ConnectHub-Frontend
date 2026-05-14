@@ -1,56 +1,163 @@
-.theme-toggle {
+/* ─── Theme Palette Picker ─────────────────────────────────────────────── */
+
+/* Wrapper — needed for relative positioning of the popover */
+.tp-wrap {
   position: relative;
-  display: inline-flex; align-items: center;
-  padding: 4px;
-  width: 112px; height: 38px;
+  display: inline-block;
+}
+
+/* Trigger button */
+.tp-btn {
+  display: inline-flex; align-items: center; gap: 7px;
+  padding: 5px 10px 5px 6px;
   background: var(--surface-3);
   border: 1px solid var(--border);
   border-radius: var(--r-full);
-  box-shadow: var(--clay-inset);
+  color: var(--text-soft);
+  font-size: 12px; font-weight: 600;
   cursor: pointer;
+  box-shadow: var(--clay-inset);
   transition: all 0.2s var(--ease);
+  height: 34px;
 }
-.theme-toggle:hover { border-color: var(--border-strong); }
+.tp-btn:hover {
+  border-color: var(--border-strong);
+  color: var(--text);
+  background: var(--surface-hover);
+}
+.tp-btn.active {
+  background: var(--primary-soft);
+  border-color: var(--primary);
+  color: var(--primary);
+}
 
-.theme-toggle.compact {
-  width: 38px; height: 38px; padding: 0;
+/* Compact (icon-only) variant */
+.tp-btn.compact {
+  width: 34px; height: 34px;
+  padding: 0;
   justify-content: center;
   background: transparent;
+  border: none;
   box-shadow: none;
+  border-radius: var(--r-sm);
 }
-.theme-toggle.compact:hover { background: var(--surface-hover); }
+.tp-btn.compact:hover { background: var(--surface-hover); color: var(--text); }
+.tp-btn.compact.active { background: var(--primary-soft); color: var(--primary); }
 
-.theme-thumb {
-  position: absolute; top: 3px;
-  width: 30px; height: 30px;
-  display: flex; align-items: center; justify-content: center;
-  background: var(--surface);
+/* Mini circular swatch preview (current theme) */
+.tp-preview {
+  width: 18px; height: 18px;
   border-radius: 50%;
-  box-shadow: var(--clay-shadow-sm);
-  color: var(--primary);
-  transition: left 0.3s var(--ease-out), transform 0.3s var(--ease-out), background 0.3s var(--ease);
-  z-index: 2;
+  border: 1.5px solid var(--border-strong);
+  flex-shrink: 0;
+  display: block;
 }
-.theme-thumb.light { left: 3px; }
-.theme-thumb.dark  { left: calc(100% - 33px); background: var(--accent-soft); color: var(--accent); }
+.tp-btn.compact .tp-preview {
+  display: none; /* compact shows only the Palette icon via CSS */
+}
+/* Compact icon sizing */
+.tp-btn.compact svg { width: 16px; height: 16px; }
 
-.theme-toggle.compact .theme-thumb {
-  position: static; width: 100%; height: 100%;
-  background: transparent; box-shadow: none;
+.tp-label {
+  font-size: 12px; font-weight: 600;
+  line-height: 1;
 }
-.theme-toggle.compact:hover .theme-thumb { color: var(--primary); }
 
-.theme-track-labels {
-  position: relative;
-  display: flex; justify-content: space-around;
-  width: 100%;
-  font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em;
-  pointer-events: none;
-  z-index: 1;
+/* ─── Popover ─────────────────────────────────────────────────────────── */
+.tp-pop {
+  position: absolute;
+  top: calc(100% + 6px);
+  right: 0;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--r-lg);
+  box-shadow: var(--clay-shadow-lg);
+  padding: 14px;
+  z-index: 300;
+  min-width: 210px;
 }
-.theme-track-labels span {
+
+.tp-pop-title {
+  font-size: 10.5px; font-weight: 800;
+  text-transform: uppercase; letter-spacing: 0.07em;
   color: var(--text-muted);
-  padding: 0 6px;
-  transition: color 0.3s var(--ease);
+  margin-bottom: 12px;
 }
-.theme-track-labels span.active { color: transparent; }
+
+/* ─── Swatch grid — 3 columns ─────────────────────────────────────────── */
+.tp-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 8px;
+}
+
+.tp-swatch {
+  display: flex; flex-direction: column; align-items: center; gap: 5px;
+  padding: 7px 4px 6px;
+  background: transparent;
+  border: 2px solid transparent;
+  border-radius: var(--r-md);
+  cursor: pointer;
+  transition: all 0.15s var(--ease);
+}
+.tp-swatch:hover {
+  background: var(--surface-3);
+  border-color: var(--border-strong);
+}
+.tp-swatch.active {
+  border-color: var(--primary);
+  background: var(--primary-soft);
+}
+
+/* Color circle swatch */
+.tp-swatch-circle {
+  width: 38px; height: 38px;
+  border-radius: 50%;
+  border: 2px solid rgba(0,0,0,0.08);
+  display: flex; align-items: center; justify-content: center;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.15), inset 0 1px 0 rgba(255,255,255,0.3);
+  flex-shrink: 0;
+  position: relative;
+  overflow: hidden;
+}
+.tp-swatch.active .tp-swatch-circle {
+  border-color: var(--primary);
+  box-shadow: 0 2px 8px rgba(0,0,0,0.15), 0 0 0 3px var(--primary-soft);
+}
+
+/* Checkmark overlay for active theme */
+.tp-swatch-check {
+  position: absolute;
+  inset: 0;
+  display: flex; align-items: center; justify-content: center;
+  background: rgba(0,0,0,0.3);
+  backdrop-filter: blur(1px);
+  color: #fff;
+  border-radius: 50%;
+}
+
+.tp-swatch-name {
+  font-size: 10px; font-weight: 700;
+  color: var(--text-muted);
+  letter-spacing: 0.01em;
+  text-align: center;
+  line-height: 1;
+}
+.tp-swatch.active .tp-swatch-name {
+  color: var(--primary);
+}
+
+/* On mobile: show the popover centered instead of right-anchored to avoid off-screen */
+@media (max-width: 480px) {
+  .tp-pop {
+    position: fixed;
+    top: auto;
+    bottom: 80px;
+    right: 12px;
+    left: 12px;
+    min-width: unset;
+    border-radius: var(--r-lg);
+    z-index: 400;
+  }
+  .tp-grid { grid-template-columns: repeat(3, 1fr); }
+}

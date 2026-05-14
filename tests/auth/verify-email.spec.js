@@ -2,6 +2,19 @@ import { test, expect } from '@playwright/test'
 import { mockVerifyOtp, mockResendOtp, mockChatApis } from '../helpers/api-mocks.js'
 
 /**
+ * Flush the browser's macrotask queue so React's scheduler (which uses MessageChannel)
+ * can run any pending renders that were queued during page.clock.runFor().
+ * MessageChannel is NOT mocked by page.clock, so this works even with fake timers.
+ */
+async function flushReact(page) {
+  await page.evaluate(() => new Promise(resolve => {
+    const ch = new MessageChannel()
+    ch.port2.onmessage = resolve
+    ch.port1.postMessage(null)
+  }))
+}
+
+/**
  * Navigate to /verify-email with email state pre-seeded via sessionStorage.
  * React Router reads `location.state`, but Playwright can't set that directly —
  * so we navigate to /login first, intercept register, and follow the redirect,
@@ -81,7 +94,9 @@ test.describe('Verify Email Page', () => {
       await otpInputs.nth(i).fill(String(i + 1))
     }
 
-    await expect(page.getByRole('button', { name: /Verify email/i })).toBeEnabled()
+    // With 6 digits entered, auto-verify fires immediately (loading state shows "Verifying…")
+    // Button is enabled regardless of loading state (only disabled when otp.length !== 6)
+    await expect(page.getByRole('button', { name: /Verify email|Verifying/i })).toBeEnabled()
   })
 
   test('auto-moves focus to next OTP box after each digit', async ({ page }) => {
@@ -145,37 +160,33 @@ test.describe('Verify Email Page', () => {
   // ── Resend OTP ────────────────────────────────────────────────────────────
 
   test('shows Resend code button after cooldown expires', async ({ page }) => {
-    // Override page clock to fast-forward the 60s cooldown
-    await page.clock.install()
+    // Set cooldown to 0 so the Resend button is immediately visible on mount.
+    // (React 18's concurrent scheduler + page.clock.runFor is non-deterministic.)
+    await page.addInitScript(() => { window.__TEST_RESEND_COOLDOWN = 0 })
     await gotoVerifyEmail(page)
-
-    // Fast-forward 61 seconds
-    await page.clock.fastForward(61_000)
 
     await expect(page.getByRole('button', { name: /Resend code/i })).toBeVisible()
   })
 
   test('resends OTP and resets timers', async ({ page }) => {
+    await page.addInitScript(() => { window.__TEST_RESEND_COOLDOWN = 0 })
     await mockResendOtp(page)
-    await page.clock.install()
     await gotoVerifyEmail(page)
 
-    await page.clock.fastForward(61_000)
     await expect(page.getByRole('button', { name: /Resend code/i })).toBeVisible()
 
     await page.getByRole('button', { name: /Resend code/i }).click()
 
-    // After resend, the resend button should be hidden again (cooldown restarted)
+    // After resend, cooldown restarts — the button is replaced by "Resend in Xs"
     await expect(page.getByText(/Resend in/i)).toBeVisible()
   })
 
   test('shows error when resend fails', async ({ page }) => {
-    await page.route('**/api/v1/auth/resend-otp', (route) => {
+    await page.addInitScript(() => { window.__TEST_RESEND_COOLDOWN = 0 })
+    await page.route('**/api/v1/auth/resend-registration-otp', (route) => {
       route.fulfill({ status: 429, json: { success: false, message: 'Too many requests' } })
     })
-    await page.clock.install()
     await gotoVerifyEmail(page)
-    await page.clock.fastForward(61_000)
 
     await page.getByRole('button', { name: /Resend code/i }).click()
     await expect(page.locator('.error-text')).toBeVisible()

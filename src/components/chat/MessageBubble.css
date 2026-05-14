@@ -88,8 +88,8 @@
 /* ─── Bubble ──────────────────────────────────────────────────────── */
 .mb-bubble {
   position: relative;
-  padding: 10px 14px;
-  border-radius: 18px;
+  padding: 8px 12px;
+  border-radius: 15px;
   background: var(--bubble-other-bg);
   color: var(--bubble-other-text);
   border: 1px solid var(--bubble-other-border);
@@ -123,15 +123,123 @@
 
 /* Bubble content */
 .mb-text {
-  font-size: 14px; line-height: 1.5;
+  font-size: 13px; line-height: 1.5;
   white-space: pre-wrap;
   letter-spacing: 0.005em;
 }
+
+/* ─── Emoji-only "sticker" bubbles ─── */
+/* When a message is purely emoji, remove the bubble decoration so the emoji
+   floats as a large sticker-style glyph. */
+.mb-bubble.emoji-only {
+  background: transparent !important;
+  border-color: transparent !important;
+  box-shadow: none !important;
+  padding: 2px 4px !important;
+}
+.mb-text.emoji-only {
+  line-height: 1.15;
+  letter-spacing: 0.02em;
+}
+.mb-text.emoji-xl { font-size: 44px; }
+.mb-text.emoji-lg { font-size: 34px; }
+.mb-text.emoji-md { font-size: 26px; }
+/* ─── Image wrapper with download overlay ─── */
+.mb-img-wrap {
+  position: relative;
+  display: inline-block;
+  margin-bottom: 4px;
+}
 .mb-img {
   max-width: 100%; max-height: 320px;
-  border-radius: var(--r-sm); margin-bottom: 4px;
+  border-radius: var(--r-sm);
   display: block;
 }
+
+/* ─── File row wrapper ─── */
+.mb-file-wrap {
+  display: inline-flex; align-items: center; gap: 8px;
+  padding: 8px 10px;
+  background: var(--surface-3);
+  border-radius: var(--r-sm);
+  max-width: 260px;
+}
+.mb-file-icon {
+  flex-shrink: 0;
+  display: flex; align-items: center; justify-content: center;
+  color: var(--primary);
+  opacity: 0.9;
+}
+.mb-bubble.own .mb-file-icon { color: rgba(255,255,255,0.85); }
+.mb-file-name {
+  flex: 1;
+  font-size: 13px; font-weight: 600;
+  color: var(--text);
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.mb-bubble.own .mb-file-wrap {
+  background: rgba(255,255,255,0.25);
+  backdrop-filter: blur(4px);
+}
+.mb-bubble.own .mb-file-name { color: #fff; }
+
+/* ─── Circular download button (shared by image + file) ─── */
+.mb-dl-btn {
+  display: flex; align-items: center; justify-content: center;
+  width: 32px; height: 32px;
+  border-radius: 50%;
+  background: rgba(0,0,0,0.45);
+  backdrop-filter: blur(6px);
+  color: #fff;
+  border: 1.5px solid rgba(255,255,255,0.3);
+  text-decoration: none;
+  flex-shrink: 0;
+  transition: background 0.15s, transform 0.15s, border-color 0.15s;
+}
+.mb-dl-btn:hover {
+  background: rgba(0,0,0,0.7);
+  border-color: rgba(255,255,255,0.6);
+  transform: scale(1.1);
+}
+
+/* Image variant: bottom-right corner, fades in on hover */
+.mb-img-wrap .mb-dl-btn {
+  position: absolute;
+  bottom: 8px; right: 8px;
+  opacity: 0;
+  transform: scale(0.8);
+  transition: opacity 0.15s, transform 0.15s;
+}
+.mb-img-wrap:hover .mb-dl-btn {
+  opacity: 1;
+  transform: scale(1);
+}
+
+/* File variant: inline, always visible with solid contrast */
+.mb-dl-btn--file {
+  background: var(--surface-hover);
+  border-color: var(--border-strong);
+  color: var(--text-soft);
+  opacity: 1;
+}
+.mb-dl-btn--file:hover {
+  background: var(--primary);
+  border-color: transparent;
+  color: #fff;
+  transform: scale(1.1);
+}
+.mb-bubble.own .mb-dl-btn--file {
+  background: rgba(255,255,255,0.22);
+  border-color: rgba(255,255,255,0.35);
+  color: rgba(255,255,255,0.9);
+}
+.mb-bubble.own .mb-dl-btn--file:hover {
+  background: rgba(255,255,255,0.42);
+  border-color: rgba(255,255,255,0.6);
+  color: #fff;
+}
+
+/* Keep old .mb-file for any legacy references */
 .mb-file {
   display: inline-flex; align-items: center; gap: 8px;
   padding: 8px 10px;
@@ -283,10 +391,10 @@
 }
 .mb-edit-input {
   width: 100%;
-  padding: 10px 12px;
+  padding: 8px 10px;
   background: var(--surface); color: var(--text);
   border: 1px solid var(--border); border-radius: var(--r-sm);
-  font-size: 14px;
+  font-size: 13px;
   outline: none;
 }
 .mb-edit-input:focus {
@@ -298,6 +406,53 @@
   margin-top: 10px;
 }
 .mb-edit-actions .btn { padding: 6px 12px; font-size: 12.5px; }
+
+/* ─── Mobile adjustments ─── */
+@media (max-width: 600px) {
+  /* Tighter row padding */
+  .mb-row { padding: 0 2px; }
+
+  /* Smaller avatar column */
+  .mb-av-col { width: 30px; }
+  .mb-av { width: 28px; height: 28px; font-size: 11px; }
+  .mb-av-spacer { width: 28px; }
+  .mb-col { max-width: calc(100% - 38px); }
+
+  /* Bubbles fill more of the narrow screen */
+  .mb-bubble-row { max-width: min(85vw, 100%); }
+
+  /* Options trigger: always show on mobile (no hover) and keep inside viewport */
+  .mb-opts {
+    position: static;
+    transform: none;
+    margin-left: 2px;
+  }
+  .mb-row.own .mb-opts {
+    margin-left: 0;
+    margin-right: 2px;
+  }
+  .mb-opt-trigger {
+    opacity: 1;
+    transform: scale(1);
+    width: 24px; height: 24px;
+  }
+
+  /* Dropdown: prevent overflow off screen-right */
+  .mb-dropdown { min-width: 120px; }
+  .mb-dropdown button { font-size: 12px; padding: 7px 10px; }
+
+  /* Images: cap height on small screens */
+  .mb-img { max-height: 220px; }
+
+  /* File row: constrain width */
+  .mb-file-wrap { max-width: min(230px, 100%); }
+
+  /* Text font-size */
+  .mb-text { font-size: 13px; }
+
+  /* Edit box */
+  .mb-edit-box { max-width: 100%; }
+}
 
 /* Message fade-in */
 @keyframes mbFadeIn {

@@ -7,8 +7,7 @@
  *     1. Email + OTP  — user enters their email, receives a 6-digit code, enters it.
  *     2. Phone + OTP  — user enters their Indian phone number (+91), gets an SMS OTP.
  *     3. Username/Email + Password — classic password login.
- *   Additionally, users can sign in via Google or GitHub (OAuth2), or continue
- *   as a Guest without creating an account.
+ *   Additionally, users can sign in via Google or GitHub (OAuth2).
  *
  * How method switching works:
  *   A "METHODS" tab bar at the top lets the user pick Email / Phone / Password.
@@ -41,10 +40,7 @@
  *   and redirects back to /oauth2/callback with tokens in the URL query string.
  *   In DEV, we use a full localhost URL because the backend runs on a different port.
  *
- * Guest login:
- *   The backend creates (or reuses) a temporary guest account and returns tokens.
- *   Guest users have lower rate limits and fewer features.
- *
+
  * saveAuth():
  *   Once any login method succeeds, saveAuth() calls authStore.setAuth() to persist
  *   the JWT tokens and user object to localStorage, then navigates to /chat.
@@ -54,7 +50,7 @@ import { Link, useNavigate } from 'react-router-dom'
 import { api } from '../../services/api'
 import { useAuthStore } from '../../store/authStore'
 import {
-  Eye, EyeOff, Loader2, Mail, Phone, AtSign, Lock, X, Check, UserPlus,
+  Eye, EyeOff, Loader2, Mail, Phone, AtSign, Lock, X, Check,
 } from 'lucide-react'
 import AuthLayout from './AuthLayout'
 import OtpInput from './OtpInput'
@@ -169,9 +165,25 @@ export default function LoginPage() {
    * saveAuth — called after any successful login to persist credentials.
    * Writes the JWT access token, refresh token, and user object to the auth
    * store (which also saves them to localStorage), then redirects to the chat page.
+   * Also fetches the full profile to ensure avatarUrl is populated (the login
+   * JWT payload may not include it).
    */
-  const saveAuth = (data) => {
+  const saveAuth = async (data) => {
     setAuth(data.accessToken, data.refreshToken, data.user)
+    // Fetch fresh profile in background to hydrate avatarUrl and other fields
+    // the JWT might not carry. updateUser merges without blocking navigation.
+    if (data.user?.userId) {
+      api.getProfile(data.user.userId)
+        .then(profile => {
+          if (profile) useAuthStore.getState().updateUser({
+            avatarUrl: profile.avatarUrl || profile.avatar || profile.profilePicture || data.user.avatarUrl,
+            fullName: profile.fullName || data.user.fullName,
+            bio: profile.bio,
+            phoneNumber: profile.phoneNumber,
+          })
+        })
+        .catch(() => {})
+    }
     navigate('/chat', { replace: true })
   }
 
@@ -305,38 +317,13 @@ export default function LoginPage() {
     window.location.href = `${OAUTH2_BASE}/oauth2/authorization/${provider}`
   }
 
-  /*
-   * handleGuestLogin — creates a temporary guest session. Guest users can explore
-   * the app without registering. The backend returns a real JWT so the same
-   * authentication flow applies, but guest accounts have stricter rate limits.
-   */
-  const handleGuestLogin = async () => {
-    setError(''); setLoading(true)
-    try {
-      const data = await api.loginAsGuest()
-      saveAuth(data)
-    } catch (err) { setError(err.message || 'Guest login failed') }
-    finally { setLoading(false) }
-  }
 
   return (
     <AuthLayout tagline="Welcome back — sign in to keep chatting">
       <h2 className="auth-title">Sign in</h2>
-      <p className="auth-subtitle">Choose how you want to sign in to ConnectHub</p>
+      <p className="auth-subtitle">Choose how you want to sign in</p>
 
-      {/* OAuth2 social login buttons — redirect to Spring Security endpoint */}
-      <div className="oauth-row">
-        <button className="oauth-btn" onClick={() => handleOAuth2('google')}>
-          <GoogleIcon /> Google
-        </button>
-        <button className="oauth-btn" onClick={() => handleOAuth2('github')}>
-          <GithubIcon /> GitHub
-        </button>
-      </div>
-
-      <div className="divider">or continue with</div>
-
-      {/* Method selector tabs — Email / Phone / Password */}
+      {/* Method selector tabs — Email OTP / Phone OTP / Password */}
       <div className="login-tabs">
         {METHODS.map(m => (
           <button
@@ -501,28 +488,16 @@ export default function LoginPage() {
         </p>
       )}
 
-      <div className="divider">or</div>
-
-      {/* Guest login — creates a temporary account, no registration needed */}
-      <button
-        type="button"
-        className="btn btn-block"
-        onClick={handleGuestLogin}
-        disabled={loading}
-        style={{
-          background: 'var(--surface)',
-          color: 'var(--text-soft)',
-          border: '1px solid var(--border)',
-          boxShadow: 'var(--clay-shadow-sm)',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          gap: 8,
-          fontWeight: 600,
-        }}
-      >
-        <UserPlus size={16} /> Continue as Guest
-      </button>
+      {/* OAuth2 — secondary option, below the main form */}
+      <div className="divider" style={{ marginTop: 20 }}>or sign in with</div>
+      <div className="oauth-row">
+        <button className="oauth-btn" onClick={() => handleOAuth2('google')}>
+          <GoogleIcon /> Google
+        </button>
+        <button className="oauth-btn" onClick={() => handleOAuth2('github')}>
+          <GithubIcon /> GitHub
+        </button>
+      </div>
 
       <div className="auth-footer">
         Don't have an account? <Link to="/register">Create one</Link>

@@ -3,72 +3,76 @@
  *
  * Purpose:
  *   A dedicated full-page view (accessed via /billing route) that shows the user
- *   their current subscription plan, subscription details, and a full table of
- *   past payments. It also lets FREE users upgrade to PRO by opening the
- *   UpgradeModal via the paymentStore.
+ *   their current subscription plan, a plan comparison widget, subscription details,
+ *   and a full table of past payments. It also lets FREE users upgrade by opening
+ *   the UpgradeModal via the paymentStore.
  *
- * Data loading:
- *   On mount, two API calls are made in parallel:
- *     - fetchSubscription() — loads the current plan, status, and dates
- *     - fetchPaymentHistory() — loads the list of past payment records
- *   Both are stored in paymentStore so the UpgradeModal can also read them.
+ * Plan tiers: FREE | PREMIUM (₹100) | PLATINUM (₹149)
  *
- * Plan card:
- *   The top card shows the current plan name (FREE or PRO) with a badge.
- *   For PRO users, the card gets a special "pro" CSS class for a highlighted border.
- *   For FREE users, an "Upgrade to PRO" button opens the UpgradeModal.
- *   PRO_FEATURES and FREE_FEATURES are hardcoded feature lists shown as
- *   colored tags so users can compare what they currently have.
- *
- * Subscription details grid (PRO only):
- *   Four small detail cards show: Subscription ID (Razorpay sub ID for support),
- *   Start Date, Plan name, and Status. These are only rendered for PRO users
- *   because FREE plans don't have a Razorpay subscription record.
- *
- * Payment history table:
- *   Fetched from the backend's payment-service. Each row shows:
- *   - Date (formatted with date-fns)
- *   - Description (e.g., "ConnectHub PRO subscription")
- *   - Amount (stored in paise on backend, divided by 100 for display in rupees)
- *   - Status badge (CAPTURED = success, FAILED = error, etc.)
- *   - Transaction ID (Razorpay payment ID, displayed in monospace for readability)
- *
- * Amount conversion:
- *   Razorpay stores amounts in the smallest currency unit (paise for INR).
- *   So ₹199 is stored as 19900. We divide by 100 before displaying.
- *
- * isPro() vs plan field:
- *   isPro() from the store returns false for CANCELLED/EXPIRED subscriptions even
- *   if plan is "PRO". We use isPro() for the upgrade button and card style
- *   but show the raw plan/status for informational display.
+ * Layout (2-col on wide screens):
+ *   Left   — active plan card + plan comparison row
+ *   Right  — subscription detail cards + payment history table
  */
 import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { usePaymentStore } from '../../store/paymentStore'
 import { useAuthStore } from '../../store/authStore'
+import UpgradeModal from '../chat/UpgradeModal'
 import {
   CreditCard, ArrowLeft, Zap, Check, Loader2,
-  Receipt, Calendar, Clock, Star, Shield, Package
+  Receipt, Calendar, Clock, Star, Shield, Package, Crown, XCircle,
 } from 'lucide-react'
 import { format } from 'date-fns'
 import './BillingPage.css'
 
-/*
- * FREE_FEATURES / PRO_FEATURES — feature lists shown inside the plan card.
- * Each entry has a label (what the feature is) and a variant (which color CSS
- * class to apply to the tag: '' = primary, 'secondary', 'accent').
- */
-const FREE_FEATURES = [
+/* ─── Plan tier definitions ─────────────────────────────────── */
+const TIERS = [
+  {
+    key: 'FREE',
+    label: 'Free',
+    price: '₹0',
+    period: 'forever',
+    icon: <Package size={14} />,
+    features: ['5 messages/min', '100 MB storage', '5 group chats'],
+  },
+  {
+    key: 'PREMIUM',
+    label: 'Premium',
+    price: '₹100',
+    period: '/month',
+    icon: <Zap size={14} />,
+    features: ['10 messages/min', '4 GB storage', '10 group chats', '90-day history'],
+  },
+  {
+    key: 'PLATINUM',
+    label: 'Platinum',
+    price: '₹149',
+    period: '/month',
+    icon: <Crown size={14} />,
+    features: ['25 messages/min', '8 GB storage', '25 group chats', '90-day history'],
+  },
+]
+
+/* Feature tag variants for the active plan card */
+const FREE_FEATURES    = [
   { label: '5 messages/min', variant: '' },
   { label: '100MB media storage', variant: 'secondary' },
   { label: 'Up to 5 group chats', variant: 'accent' },
 ]
-
 const PREMIUM_FEATURES = [
-  { label: '30 messages/min', variant: '' },
-  { label: '10GB media storage', variant: 'secondary' },
-  { label: 'Unlimited groups', variant: 'accent' },
-  { label: '30 media uploads/min', variant: 'secondary' },
+  { label: '10 messages/min', variant: '' },
+  { label: '4GB media storage', variant: 'secondary' },
+  { label: '10 group chats', variant: 'accent' },
+  { label: '10 media uploads/min', variant: 'secondary' },
+  { label: '90-day message history', variant: '' },
+  { label: 'Priority support', variant: '' },
+]
+const PLATINUM_FEATURES = [
+  { label: '25 messages/min', variant: '' },
+  { label: '8GB media storage', variant: 'secondary' },
+  { label: '25 group chats', variant: 'accent' },
+  { label: '25 media uploads/min', variant: 'secondary' },
+  { label: '90-day message history', variant: '' },
   { label: 'Priority support', variant: '' },
 ]
 
@@ -78,167 +82,281 @@ export default function BillingPage() {
   const {
     subscription, payments, loading,
     fetchSubscription, fetchPaymentHistory,
-    openUpgradeModal, isPro,
+    openUpgradeModal, closeUpgradeModal, upgradeModalOpen, isPro, cancelSubscription,
   } = usePaymentStore()
 
-  /*
-   * Load subscription and payment data on mount.
-   * Both calls are independent so they fire concurrently via the store.
-   */
+  const [cancelling, setCancelling]             = useState(false)
+  const [cancelError, setCancelError]           = useState(null)
+  const [showCancelConfirm, setShowCancelConfirm] = useState(false)
+
   useEffect(() => {
     fetchSubscription()
     fetchPaymentHistory()
   }, [])
 
-  /*
-   * isProUser — uses isPro() selector which accounts for cancelled/expired status.
-   * plan and status are the raw values from the subscription record for display.
-   */
-  const isProUser = isPro()
-  const plan = subscription?.plan || 'FREE'
-  const status = subscription?.status || 'ACTIVE'
+  const isProUser    = isPro()
+  const plan         = subscription?.plan || 'FREE'
+  const status       = (subscription?.status || 'ACTIVE').toUpperCase()
+  const isCancelled  = status === 'CANCELLED'
+  const isHalted     = status === 'HALTED'
+  const isPlatinum   = plan === 'PLATINUM'
+  const isPremium    = plan === 'PREMIUM'
+  const isRecurring  = !!subscription?.razorpaySubscriptionId
+
+  const planDisplayName = isPlatinum ? 'Platinum' : isPremium ? 'Premium' : 'Free Plan'
+  const planPrice       = isPlatinum ? '₹149' : isPremium ? '₹100' : '₹0'
+  const features        = isPlatinum ? PLATINUM_FEATURES : isPremium ? PREMIUM_FEATURES : FREE_FEATURES
+
+  const handleCancel = async () => {
+    setCancelling(true); setCancelError(null)
+    try {
+      await cancelSubscription()
+      setShowCancelConfirm(false)
+    } catch (e) { setCancelError(e.message) }
+    finally { setCancelling(false) }
+  }
 
   return (
     <div className="billing-page">
-      {/* Page header with title and Back to Chat navigation */}
+      <UpgradeModal isOpen={upgradeModalOpen} onClose={closeUpgradeModal} />
+
+      {/* ── Page header ─────────────────────────────────────────── */}
       <div className="billing-header">
         <div className="billing-header-left">
-          <div className="billing-header-icon">
-            <CreditCard size={24} />
-          </div>
-          <div>
-            <h1>Billing & Subscription</h1>
-            <p>Manage your plan and view payment history</p>
+          <div className="billing-header-icon"><CreditCard size={22} /></div>
+          <div className="billing-header-text">
+            <h1>Plans &amp; Billing</h1>
+            <p>Your subscription plan and billing records</p>
           </div>
         </div>
-        <button className="admin-back-btn" onClick={() => navigate('/chat')}>
-          <ArrowLeft size={15} /> Back to Chat
+        <button className="billing-back-btn" onClick={() => navigate('/chat')}>
+          <ArrowLeft size={13} /> Back to Chat
         </button>
       </div>
 
-      {/* Current plan card — highlighted with "pro" class for PRO users */}
-      <div className={`billing-plan-card ${isProUser ? 'pro' : ''}`}>
-        <div className="billing-plan-info">
-          <div className="billing-plan-name">
-            {isProUser ? <><Zap size={20} /> ConnectHub Premium</> : <><Package size={20} /> Free Plan</>}
-            <span className={`billing-plan-badge ${isProUser ? 'pro' : 'free'}`}>
-              {plan}
-            </span>
-            <span className={`billing-plan-badge active`}>
-              {status}
-            </span>
-          </div>
-          <div className="billing-plan-price">
-            {isProUser
-              ? <><strong>₹99</strong> one-time</>
-              : <><strong>₹0</strong> — Free forever</>
-            }
-          </div>
-          {/* Feature tags — shows Premium or FREE features depending on current plan */}
-          <div className="billing-plan-features">
-            {(isProUser ? PREMIUM_FEATURES : FREE_FEATURES).map(f => (
-              <span key={f.label} className={`billing-feature-tag ${f.variant}`}>
-                <Check size={10} /> {f.label}
-              </span>
-            ))}
-          </div>
-        </div>
+      {/* ── Two-column body ─────────────────────────────────────── */}
+      <div className="billing-body">
 
-        {/* Upgrade button only shown for FREE users */}
-        {!isProUser && (
-          <button className="billing-upgrade-btn" onClick={openUpgradeModal}>
-            <Zap size={16} /> Upgrade to PRO
-          </button>
-        )}
-      </div>
+        {/* LEFT column — plan info */}
+        <div className="billing-left">
 
-      {/* Subscription detail cards — shown only for active PRO users */}
-      {isProUser && subscription && (
-        <div className="billing-details-grid">
-          <div className="billing-detail-card">
-            <div className="billing-detail-label">Order ID</div>
-            <div className="billing-detail-value" style={{ fontSize: '0.82rem', fontFamily: 'var(--font-mono)' }}>
-              {subscription.razorpayOrderId || subscription.id || '—'}
-            </div>
-          </div>
-          <div className="billing-detail-card">
-            <div className="billing-detail-label"><Calendar size={12} style={{ display: 'inline', verticalAlign: '-1px' }} /> Start Date</div>
-            <div className="billing-detail-value">
-              {subscription.startDate ? format(new Date(subscription.startDate), 'MMM d, yyyy') : '—'}
-            </div>
-          </div>
-          <div className="billing-detail-card">
-            <div className="billing-detail-label"><Star size={12} style={{ display: 'inline', verticalAlign: '-1px' }} /> Plan</div>
-            <div className="billing-detail-value">{subscription.plan || 'PRO'}</div>
-          </div>
-          <div className="billing-detail-card">
-            <div className="billing-detail-label"><Shield size={12} style={{ display: 'inline', verticalAlign: '-1px' }} /> Status</div>
-            <div className="billing-detail-value">{subscription.status || 'ACTIVE'}</div>
-          </div>
-        </div>
-      )}
-
-      {/* Payment history section */}
-      <h2 className="billing-section-title">
-        <Receipt size={18} /> Payment History
-      </h2>
-
-      {/* Loading spinner shown only when we have no data yet */}
-      {loading && payments.length === 0 ? (
-        <div className="billing-empty">
-          <Loader2 size={28} className="spin" style={{ margin: '0 auto 12px', display: 'block' }} />
-          <p style={{ color: 'var(--text-muted)', fontSize: '0.84rem' }}>Loading payment history…</p>
-        </div>
-      ) : payments.length === 0 ? (
-        /* Empty state — different message for PRO (no payments yet) vs FREE (prompt to upgrade) */
-        <div className="billing-empty">
-          <div className="billing-empty-icon"><Receipt size={24} /></div>
-          <h3>No payments yet</h3>
-          <p>{isProUser ? 'Your payment records will appear here' : 'Upgrade to Premium to start your billing history'}</p>
-        </div>
-      ) : (
-        /*
-         * Payment history table — each row is one transaction record from the backend.
-         * Amounts are in paise (smallest INR unit), so we divide by 100 to get rupees.
-         * The currency field defaults to ₹ if not present or if it's "INR".
-         */
-        <div className="billing-history-table">
-          <table>
-            <thead>
-              <tr>
-                <th>Date</th>
-                <th>Description</th>
-                <th>Amount</th>
-                <th>Status</th>
-                <th>Transaction ID</th>
-              </tr>
-            </thead>
-            <tbody>
-              {payments.map((p, i) => (
-                <tr key={p.id || i}>
-                  <td style={{ whiteSpace: 'nowrap' }}>
-                    <Clock size={12} style={{ display: 'inline', verticalAlign: '-1px', marginRight: 4 }} />
-                    {p.createdAt ? format(new Date(p.createdAt), 'MMM d, yyyy') : '—'}
-                  </td>
-                  <td>{p.description || 'ConnectHub PRO'}</td>
-                  <td style={{ fontWeight: 700 }}>
-                    {p.currency === 'INR' ? '₹' : (p.currency || '₹')}{(p.amount || 0) / 100}
-                  </td>
-                  <td>
-                    <span className={`billing-payment-status ${(p.status || '').toLowerCase()}`}>
-                      {p.status || '—'}
+          {/* Active plan card */}
+          <div className={`billing-plan-card ${isPlatinum ? 'platinum' : isProUser ? 'pro' : ''}`}>
+            <div className="billing-plan-card-top">
+              {/* Left: name + price stacked */}
+              <div className="billing-plan-card-left">
+                <div className="billing-plan-name">
+                  {isPlatinum ? <Crown size={16}/> : isProUser ? <Zap size={16}/> : <Package size={16}/>}
+                  {planDisplayName}
+                  {/* Only show plan tier badge for actually paid plans */}
+                  {(isPremium || isPlatinum) && (
+                    <span className={`billing-plan-badge ${isPlatinum ? 'platinum' : 'pro'}`}>
+                      {isPlatinum ? 'Platinum' : 'Premium'}
                     </span>
-                  </td>
-                  {/* Razorpay payment ID in monospace — useful for support and refund requests */}
-                  <td style={{ fontSize: '0.76rem', fontFamily: 'var(--font-mono)', color: 'var(--text-muted)' }}>
-                    {p.razorpayPaymentId || p.transactionId || '—'}
-                  </td>
-                </tr>
+                  )}
+                  {/* Status badge only makes sense when on a paid plan */}
+                  {(isPremium || isPlatinum) && (
+                    <span className={`billing-plan-badge ${status === 'ACTIVE' ? 'active' : status === 'CANCELLED' ? 'cancelled' : status === 'HALTED' ? 'halted' : 'pending-badge'}`}>
+                      {status === 'ACTIVE' ? 'Active' : status === 'CANCELLED' ? 'Cancelled' : status === 'HALTED' ? 'Payment failed' : status}
+                    </span>
+                  )}
+                </div>
+                <div className="billing-plan-price">
+                  <strong>{planPrice}</strong>
+                  {isProUser
+                    ? <span className="billing-price-sub">/month · auto-renews</span>
+                    : <span className="billing-price-sub">— yours for life, no card needed</span>
+                  }
+                  {isCancelled && subscription?.endDate && (
+                    <span className="billing-plan-note muted">
+                      · Access until {format(new Date(subscription.endDate), 'MMM d, yyyy')}
+                    </span>
+                  )}
+                  {isHalted && (
+                    <span className="billing-plan-note danger">
+                      · Payment failed — update payment method in Razorpay
+                    </span>
+                  )}
+                </div>
+              </div>
+
+              {/* Right: upgrade / resubscribe button */}
+              <div className="billing-plan-actions">
+                {!isProUser && (
+                  <button className="billing-upgrade-btn" onClick={() => openUpgradeModal('PLATINUM')}>
+                    <Zap size={14}/> Upgrade Plan
+                  </button>
+                )}
+                {isCancelled && (
+                  <button className="billing-upgrade-btn" onClick={() => openUpgradeModal(plan)}>
+                    <Zap size={14}/> Resubscribe
+                  </button>
+                )}
+              </div>
+            </div>
+
+            {/* Feature tags */}
+            <div className="billing-plan-features">
+              {features.map(f => (
+                <span key={f.label} className={`billing-feature-tag ${f.variant}`}>
+                  <Check size={9}/> {f.label}
+                </span>
               ))}
-            </tbody>
-          </table>
+            </div>
+
+            {/* Cancel / confirm actions (separate row, below features) */}
+            <div className="billing-plan-actions">
+              {isProUser && isRecurring && !isCancelled && (
+                !showCancelConfirm ? (
+                  <button
+                    className="btn btn-ghost billing-cancel-btn"
+                    onClick={() => setShowCancelConfirm(true)}
+                  >
+                    <XCircle size={13}/> Cancel subscription
+                  </button>
+                ) : (
+                  <div className="billing-cancel-confirm">
+                    <p>
+                      You'll keep access until <strong>
+                        {subscription?.endDate ? format(new Date(subscription.endDate), 'MMM d, yyyy') : 'end of billing period'}
+                      </strong>. Cancel anyway?
+                    </p>
+                    {cancelError && <span className="billing-plan-note danger">{cancelError}</span>}
+                    <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                      <button className="btn btn-ghost billing-cancel-btn danger" onClick={handleCancel} disabled={cancelling}>
+                        {cancelling ? <Loader2 size={12} className="spin"/> : <XCircle size={12}/>} Yes, cancel
+                      </button>
+                      <button className="btn btn-ghost billing-cancel-btn" onClick={() => { setShowCancelConfirm(false); setCancelError(null) }}>
+                        Keep subscription
+                      </button>
+                    </div>
+                  </div>
+                )
+              )}
+            </div>
+          </div>
+
+          {/* ── Plan comparison row ──────────────────────────────── */}
+          <div className="billing-tiers">
+            {TIERS.map(tier => {
+              const isActive = plan === tier.key
+              return (
+                <div key={tier.key} className={`billing-tier-card ${isActive ? 'active' : ''} ${tier.key.toLowerCase()}`}>
+                  <div className="billing-tier-header">
+                    <span className="billing-tier-icon">{tier.icon}</span>
+                    <span className="billing-tier-name">{tier.label}</span>
+                    {isActive && <span className="billing-tier-badge">Current</span>}
+                  </div>
+                  <div className="billing-tier-price">
+                    {tier.price}
+                    <span className="billing-tier-period">{tier.period}</span>
+                  </div>
+                  <ul className="billing-tier-features">
+                    {tier.features.map(f => (
+                      <li key={f}><Check size={10}/> {f}</li>
+                    ))}
+                  </ul>
+                  {/* Only show the upgrade CTA for paid tiers the user isn't already on */}
+                  {!isActive && tier.key !== 'FREE' && (
+                    <button
+                      className={`billing-tier-btn ${tier.key.toLowerCase()}`}
+                      onClick={() => openUpgradeModal(tier.key)}
+                    >
+                      Get {tier.label}
+                    </button>
+                  )}
+                </div>
+              )
+            })}
+          </div>
         </div>
-      )}
+
+        {/* RIGHT column — subscription details + payment history */}
+        <div className="billing-right">
+
+          {/* Subscription detail cards — only for paid users */}
+          {isProUser && subscription && (
+            <div className="billing-details-grid">
+              <div className="billing-detail-card">
+                <div className="billing-detail-label">Subscription ID</div>
+                <div className="billing-detail-value mono">
+                  {subscription.razorpaySubscriptionId || subscription.razorpayOrderId || subscription.id || '—'}
+                </div>
+              </div>
+              <div className="billing-detail-card">
+                <div className="billing-detail-label"><Calendar size={11} style={{ display:'inline', verticalAlign:'-1px' }}/> Start Date</div>
+                <div className="billing-detail-value">
+                  {subscription.startDate ? format(new Date(subscription.startDate), 'MMM d, yyyy') : '—'}
+                </div>
+              </div>
+              <div className="billing-detail-card">
+                <div className="billing-detail-label"><Clock size={11} style={{ display:'inline', verticalAlign:'-1px' }}/> {isCancelled ? 'Access Until' : 'Next Billing'}</div>
+                <div className="billing-detail-value">
+                  {subscription.endDate ? format(new Date(subscription.endDate), 'MMM d, yyyy') : '—'}
+                </div>
+              </div>
+              <div className="billing-detail-card">
+                <div className="billing-detail-label"><Shield size={11} style={{ display:'inline', verticalAlign:'-1px' }}/> Status</div>
+                <div className="billing-detail-value">{subscription.status || 'ACTIVE'}</div>
+              </div>
+            </div>
+          )}
+
+          {/* Payment history */}
+          <div className="billing-section-title">
+            <Receipt size={15}/> Transaction History
+          </div>
+
+          {loading && payments.length === 0 ? (
+            <div className="billing-empty-inline">
+              <Loader2 size={16} className="spin"/>
+              <span>Loading payment history…</span>
+            </div>
+          ) : payments.length === 0 ? (
+            <div className="billing-empty-inline">
+              <Receipt size={15} style={{ opacity: 0.4 }}/>
+              <span>No transactions yet
+                {!isProUser && <> — <button onClick={openUpgradeModal} style={{ background:'none', border:'none', cursor:'pointer', color:'var(--primary)', fontWeight:600, fontSize:'inherit', padding:0 }}>upgrade</button> to start your billing history</>}
+              </span>
+            </div>
+          ) : (
+            <div className="billing-history-table">
+              <table>
+                <thead>
+                  <tr>
+                    <th>Date</th>
+                    <th>Description</th>
+                    <th>Amount</th>
+                    <th>Status</th>
+                    <th>Transaction ID</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {payments.map((p, i) => (
+                    <tr key={p.id || i}>
+                      <td style={{ whiteSpace: 'nowrap' }}>
+                        {p.createdAt ? format(new Date(p.createdAt), 'MMM d, yyyy') : '—'}
+                      </td>
+                      <td>{p.description || 'ConnectHub Upgrade'}</td>
+                      <td style={{ fontWeight: 700 }}>
+                        {p.currency === 'INR' ? '₹' : (p.currency || '₹')}{(p.amount || 0) / 100}
+                      </td>
+                      <td>
+                        <span className={`billing-payment-status ${(p.status || '').toLowerCase()}`}>
+                          {p.status || '—'}
+                        </span>
+                      </td>
+                      <td className="billing-txn-id">
+                        {p.razorpayPaymentId || p.transactionId || '—'}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
+      </div>
     </div>
   )
 }

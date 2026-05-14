@@ -30,7 +30,7 @@
 import { useState, useEffect, useRef } from 'react'
 import { useAuthStore } from '../../store/authStore'
 import { api } from '../../services/api'
-import { Bell, CheckCheck, MessageCircle, UserPlus, AtSign } from 'lucide-react'
+import { Bell, CheckCheck, MessageCircle, UserPlus, AtSign, X } from 'lucide-react'
 import { formatDistanceToNow } from 'date-fns'
 import './NotificationCenter.css'
 
@@ -105,6 +105,22 @@ export default function NotificationCenter() {
     setUnreadCount(0)
   }
 
+  /*
+   * handleDelete — permanently removes a single notification.
+   * Calls DELETE /notifications/{id} and removes it from the local list optimistically.
+   * If the notification was unread, the badge count is decremented too.
+   * stopPropagation prevents the parent row's onClick (mark-as-read) from also firing.
+   */
+  const handleDelete = async (e, id) => {
+    e.stopPropagation()
+    const notif = notifications.find(n => n.notificationId === id)
+    try {
+      await api.deleteNotif(id)
+      setNotifications(prev => prev.filter(n => n.notificationId !== id))
+      if (notif && !notif.isRead) setUnreadCount(c => Math.max(0, c - 1))
+    } catch {}
+  }
+
   return (
     <div className="nc-wrap" ref={ref}>
       {/* Bell button — shows badge with unread count if > 0 */}
@@ -148,6 +164,14 @@ export default function NotificationCenter() {
                   </div>
                   {/* Blue dot indicator for unread notifications */}
                   {!n.isRead && <span className="nc-dot"/>}
+                  {/* Delete button — permanently removes this notification */}
+                  <button
+                    className="nc-delete"
+                    title="Delete notification"
+                    onClick={(e) => handleDelete(e, n.notificationId)}
+                  >
+                    <X size={13}/>
+                  </button>
                 </div>
               )
             })}

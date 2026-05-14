@@ -13,9 +13,8 @@
  */
 import { format } from 'date-fns'
 import { X, Check, CheckCheck } from 'lucide-react'
+import Avatar from '../common/Avatar'
 import './MessageInfoPanel.css'
-
-const PALETTE = ['#FF8E72','#7AC9A7','#B8A4F4','#FFB547','#F47174','#6BCEEA','#FF9F87','#9D8FF5']
 
 function fmtTime(iso) {
   if (!iso) return null
@@ -26,12 +25,9 @@ function fmtTime(iso) {
 
 function MemberRow({ member, status, timestamp }) {
   const name = member.fullName || member.username || `User #${member.userId}`
-  const color = PALETTE[(String(name).charCodeAt(0) || 0) % PALETTE.length]
   return (
     <div className="mip-member-row">
-      <div className="mip-av" style={{ background: color }}>
-        {name.charAt(0).toUpperCase()}
-      </div>
+      <Avatar src={member.avatarUrl} name={name} className="mip-av" />
       <div className="mip-member-info">
         <span className="mip-member-name">{name}</span>
         {timestamp && <span className="mip-member-time">{fmtTime(timestamp)}</span>}

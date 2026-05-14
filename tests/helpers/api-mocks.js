@@ -82,7 +82,7 @@ export const MOCK_SUBSCRIPTION = {
 
 export const MOCK_PRO_SUBSCRIPTION = {
   id: 'sub-1',
-  plan: 'PRO',
+  plan: 'PREMIUM',
   status: 'ACTIVE',
   razorpaySubId: 'sub_mock_123',
   startDate: '2024-01-01T00:00:00Z',
@@ -202,19 +202,6 @@ export async function mockPasswordLogin(page) {
 export async function mockPasswordLoginFailure(page, message = 'Invalid credentials') {
   await page.route('**/api/v1/auth/login', route =>
     route.fulfill({ status: 401, json: { success: false, message } })
-  )
-}
-
-// ── Guest login ───────────────────────────────────────────────────────────────
-
-export async function mockGuestLogin(page) {
-  await page.route('**/api/v1/auth/guest', route =>
-    route.fulfill({
-      json: {
-        ...MOCK_AUTH_RESPONSE,
-        user: { ...MOCK_USER, userId: 'guest-1', username: 'guest_user', fullName: 'Guest User' },
-      },
-    })
   )
 }
 

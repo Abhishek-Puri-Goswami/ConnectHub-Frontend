@@ -27,6 +27,7 @@
  * (e.g. /auth/* → auth-service, /rooms/* → room-service, etc.).
  */
 import { useToastStore } from "../store/toastStore";
+import { useAuthStore } from "../store/authStore";
 
 // Previous default (same-origin gateway): const API = "/api/v1"
 const API = import.meta.env.VITE_API_BASE_URL || "/api/v1";
@@ -46,6 +47,10 @@ function getServiceName(path) {
 }
 
 class ApiService {
+  // Promise lock — ensures concurrent 401s only trigger ONE refresh attempt.
+  // All callers await the same Promise instead of spawning N parallel refreshes.
+  _refreshing = null;
+
   /*
    * req() — the core method that all API calls use internally.
    * Parameters:
@@ -53,13 +58,16 @@ class ApiService {
    *   path    — API path after /api/v1 (e.g. "/auth/login")
    *   body    — optional request body object (will be JSON.stringify'd)
    *   auth    — if true (default), attach the JWT Bearer token
+   *   quiet   — if true, suppress toast notifications
+   *   _retry  — internal flag; true on the single automatic retry after a
+   *             token refresh, prevents infinite retry loops
    *
    * Automatic token refresh:
    *   If a 401 is received, we attempt a silent token refresh. On success,
    *   the same request is retried once with the new token. On failure, the
    *   session is cleared and the user is redirected to the login page.
    */
-  async req(method, path, body, auth = true, quiet = false) {
+  async req(method, path, body, auth = true, quiet = false, _retry = false) {
     const headers = { "Content-Type": "application/json" };
     const token = localStorage.getItem("accessToken");
     if (auth && token) headers["Authorization"] = "Bearer " + token;
@@ -79,9 +87,9 @@ class ApiService {
       throw err;
     }
 
-    if (res.status === 401 && auth) {
+    if (res.status === 401 && auth && !_retry) {
       const ok = await this.tryRefresh();
-      if (ok) return this.req(method, path, body, auth, quiet);
+      if (ok) return this.req(method, path, body, auth, quiet, true); // _retry=true prevents loops
 
       toast("Your session has expired. Please log in again.", "warning");
       localStorage.clear();
@@ -139,17 +147,36 @@ class ApiService {
       });
       if (!res.ok) return false;
       const data = await res.json();
+      if (!data.accessToken) return false; // guard against malformed response
       localStorage.setItem("accessToken", data.accessToken);
-      localStorage.setItem("refreshToken", data.refreshToken);
-      if (data.user) localStorage.setItem("user", JSON.stringify(data.user));
+      if (data.refreshToken) localStorage.setItem("refreshToken", data.refreshToken);
+      if (data.user) {
+        localStorage.setItem("user", JSON.stringify(data.user));
+        // CRITICAL: also sync the Zustand store so every component that reads
+        // user.role / user.subscriptionTier immediately sees the refreshed values.
+        // Without this, the store stays stale between login and next page reload.
+        useAuthStore.getState().setAuth(data.accessToken, data.refreshToken || rt, data.user);
+      }
       return true;
     } catch {
       return false;
     }
   }
 
+  /*
+   * tryRefresh() — deduplication wrapper around refreshSession().
+   *
+   * If multiple requests fail with 401 simultaneously (e.g. on page load),
+   * they all await the SAME Promise instead of each firing an independent
+   * /auth/refresh call. The lock (_refreshing) is cleared when the refresh
+   * settles so the next expiry cycle can refresh again.
+   */
   async tryRefresh() {
-    return this.refreshSession();
+    if (this._refreshing) return this._refreshing;
+    this._refreshing = this.refreshSession().finally(() => {
+      this._refreshing = null;
+    });
+    return this._refreshing;
   }
 
   /*
@@ -193,24 +220,10 @@ class ApiService {
   }
 
   /*
-   * Login methods — the app supports four ways to log in:
-   *
-   * 1. login(d)              — classic username/email + password. Most common path.
-   * 2. loginAsGuest()        — creates a temporary anonymous session. No sign-up needed.
-   * 3. Email OTP flow:
-   *      requestEmailLoginOtp(email) — sends a one-time code to the user's email.
-   *      loginWithEmailOtp(email, otp) — verifies the code and returns tokens.
-   * 4. Phone OTP flow:
-   *      requestPhoneLoginOtp(phoneNumber) — sends SMS OTP.
-   *      loginWithPhoneOtp(phoneNumber, otp) — verifies and returns tokens.
-   *
    * All login methods use auth=false because there is no token yet.
    */
   login(d) {
     return this.req("POST", "/auth/login", d, false);
-  }
-  loginAsGuest() {
-    return this.req("POST", "/auth/guest", null, false);
   }
 
   requestEmailLoginOtp(email) {
@@ -260,6 +273,12 @@ class ApiService {
   }
   verifyResetOtp(d) {
     return this.req("POST", "/auth/verify-reset-otp", d, false);
+  }
+  forgotPasswordByPhone(phoneNumber) {
+    return this.req("POST", "/auth/forgot-password/phone", { phoneNumber }, false);
+  }
+  verifyPhoneResetOtp(d) {
+    return this.req("POST", "/auth/verify-reset-otp/phone", d, false);
   }
   resetPassword(d) {
     return this.req("POST", "/auth/reset-password", d, false);
@@ -311,6 +330,8 @@ class ApiService {
    * createRoom(d)              — creates a new DM or group room. The body includes
    *                              name, type (DM/GROUP), and initial member IDs.
    * getUserRooms(uid)          — fetches all rooms the user belongs to (shown in sidebar).
+   * searchRooms(q)             — searches all public rooms by keyword (room discovery).
+   *                              Returns public GROUP rooms whose name/description matches q.
    * getRoom(id)                — fetches a single room's details (name, avatar, etc.).
    * getRoomMembers(id)         — fetches the list of members in a room.
    * addMember / removeMember   — add or remove a user from a group room.
@@ -328,6 +349,9 @@ class ApiService {
   }
   getUserRooms(uid) {
     return this.req("GET", "/rooms/user/" + uid);
+  }
+  searchRooms(q) {
+    return this.req("GET", "/rooms/search?q=" + encodeURIComponent(q));
   }
   getRoom(id) {
     return this.req("GET", "/rooms/" + id);
@@ -372,6 +396,25 @@ class ApiService {
   }
   getAllRooms() {
     return this.req("GET", "/rooms");
+  }
+
+  /*
+   * Room invite link methods — generate/revoke an invite code (admin) or join by code.
+   * generateInviteCode(rid) — creates a short random code stored on the room; returns { inviteCode }.
+   * joinByInviteCode(code)  — adds the current user to the room referenced by the code.
+   * revokeInviteCode(rid)   — deletes the current invite code so existing links stop working.
+   */
+  generateInviteCode(rid) {
+    return this.req("POST", "/rooms/" + rid + "/invite");
+  }
+  getRoomPreviewByCode(code) {
+    return this.req("GET", "/rooms/join/" + encodeURIComponent(code));
+  }
+  joinByInviteCode(code) {
+    return this.req("POST", "/rooms/join/" + encodeURIComponent(code));
+  }
+  revokeInviteCode(rid) {
+    return this.req("DELETE", "/rooms/" + rid + "/invite");
   }
 
   /*
@@ -459,8 +502,34 @@ class ApiService {
     }
     return res.json();
   }
+
+  async uploadProfilePicture(file) {
+    const fd = new FormData();
+    fd.append("file", file);
+    const token = localStorage.getItem("accessToken");
+    const res = await fetch(API + "/media/profile-picture", {
+      method: "POST",
+      headers: token ? { Authorization: "Bearer " + token } : {},
+      body: fd,
+    });
+    if (!res.ok) {
+      const raw = await res.text();
+      let errText = "HTTP " + res.status;
+      try {
+        const errJson = JSON.parse(raw);
+        errText = errJson.message || errJson.error || raw || errText;
+      } catch (e) {
+        if (raw) errText += ": " + raw;
+      }
+      throw new Error(errText);
+    }
+    return res.json();
+  }
   getRoomMedia(rid) {
-    return this.req("GET", "/media/room/" + rid);
+    return this.req("GET", "/media/room/" + rid).then(page => page?.content ?? []);
+  }
+  deleteMedia(id) {
+    return this.req("DELETE", "/media/" + id);
   }
 
   /*
@@ -483,6 +552,9 @@ class ApiService {
   }
   markAllNotifsRead(uid) {
     return this.req("PUT", "/notifications/user/" + uid + "/read-all");
+  }
+  deleteNotif(id) {
+    return this.req("DELETE", "/notifications/" + id);
   }
   getUnreadCount(uid) {
     return this.req("GET", "/notifications/user/" + uid + "/unread-count");
@@ -516,22 +588,89 @@ class ApiService {
    *                        the sidebar and member list to show green/grey dot indicators).
    */
   ping(uid) {
-    return this.req("POST", "/presence/ping/" + uid);
+    return this.req("POST", "/presence/ping/" + uid, null, true, true);
   }
   setOnline(uid) {
     return this.req("POST", "/presence/online/" + uid, {
       deviceType: "WEB",
       sessionId: "browser",
-    });
+    }, true, true);
   }
   setOffline(uid) {
-    return this.req("POST", "/presence/offline/" + uid);
+    return this.req("POST", "/presence/offline/" + uid, null, true, true);
   }
   getPresence(uid) {
-    return this.req("GET", "/presence/" + uid);
+    // quiet=true — 404 is normal here (no presence record until first WS connect)
+    return this.req("GET", "/presence/" + uid, null, true, true);
   }
   getBulkPresence(ids) {
     return this.req("POST", "/presence/bulk", ids);
+  }
+  setPresenceStatus(uid, status, customMessage = '') {
+    // quiet=true — status updates are fire-and-forget; failures should not toast
+    return this.req("PUT", `/presence/status/${uid}`, { status, customMessage }, true, true);
+  }
+
+  /*
+   * Session management methods — routed to auth-service via /auth/sessions.
+   * Each login creates a Redis key "session:{userId}:{jti}" with metadata.
+   *
+   * getSessions()         — returns all active sessions for the current user.
+   *                         Each item has: jti, metadata (JSON string), expiresInSeconds.
+   * revokeSession(jti)    — blacklists a specific JWT by its jti. The gateway will
+   *                         reject any further requests carrying that token.
+   * revokeAllSessions()   — sets a user-level invalidation key so ALL active tokens
+   *                         are rejected immediately (logout everywhere).
+   */
+  leaveRoom(roomId, userId) {
+    return this.req("DELETE", "/rooms/" + encodeURIComponent(roomId) + "/members/" + userId);
+  }
+
+  getEmailPreference() {
+    return this.req("GET", "/notifications/email-preferences");
+  }
+  saveEmailPreference(enabled) {
+    return this.req("PUT", "/notifications/email-preferences", { emailNotificationsEnabled: enabled });
+  }
+
+  /*
+   * FCM device token registration — called by ProfilePanel when the user enables
+   * or disables browser push notifications.
+   *
+   * registerFcmToken(token) — POST /notifications/device-token
+   *   Stores the browser's FCM registration token against the user so the
+   *   notification-service can reach this browser when a push event fires.
+   *   platform is always "WEB" for browser clients.
+   *
+   * removeFcmToken(token) — DELETE /notifications/device-token/{token}
+   *   Removes the token so no further pushes are sent to this browser.
+   *   quiet=true so a 404 (already removed) doesn't produce an error toast.
+   */
+  registerFcmToken(fcmToken) {
+    return this.req("POST", "/notifications/device-token", { fcmToken, platform: "WEB" });
+  }
+  removeFcmToken(fcmToken) {
+    return this.req(
+      "DELETE",
+      "/notifications/device-token/" + encodeURIComponent(fcmToken),
+      null,
+      true,  // auth
+      true,  // quiet — 404 is acceptable if token was already removed
+    );
+  }
+
+  deleteAccount(password) {
+    return this.req("DELETE", "/auth/me", password ? { password } : undefined);
+  }
+
+  getSessions() {
+    return this.req("GET", "/auth/sessions");
+  }
+  revokeSession(jti) {
+    return this.req("DELETE", "/auth/sessions/" + encodeURIComponent(jti));
+  }
+  revokeAllSessions() {
+    return this.req("DELETE", "/auth/sessions");
   }
 }
 

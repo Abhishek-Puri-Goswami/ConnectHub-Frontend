@@ -42,6 +42,7 @@
 import { useEffect, useState } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import { useAuthStore } from '../../store/authStore'
+import { api } from '../../services/api'
 import { Loader2, AlertCircle, MessageCircle, Mail } from 'lucide-react'
 import AuthLayout from './AuthLayout'
 import './AuthStyles.css'
@@ -64,6 +65,7 @@ export default function OAuth2CallbackPage() {
     const userId = searchParams.get('userId')
     const username = searchParams.get('username')
     const email = searchParams.get('email')
+    const role = searchParams.get('role')
 
     /*
      * If the backend included an `error` parameter, the OAuth2 flow failed.
@@ -77,18 +79,32 @@ export default function OAuth2CallbackPage() {
     if (token && refreshToken) {
       /*
        * Build a minimal user object from the query parameters.
-       * We don't have the full profile yet (avatar, fullName, etc.) but
-       * authStore will be refreshed on the next page load from the backend.
-       * status and role are set to sensible defaults.
+       * We don't have the full profile yet (avatar, fullName, etc.) —
+       * fetch it in the background after setting auth so the sidebar avatar
+       * shows immediately.
        */
       const user = {
         userId: parseInt(userId),
         username,
         email,
         status: 'ONLINE',
-        role: 'USER',
+        role: role || 'USER',
       }
       setAuth(token, refreshToken, user)
+
+      // Fetch full profile in background to populate avatarUrl and fullName
+      if (userId) {
+        api.getProfile(parseInt(userId))
+          .then(profile => {
+            if (profile) useAuthStore.getState().updateUser({
+              avatarUrl: profile.avatarUrl || profile.avatar || profile.profilePicture,
+              fullName: profile.fullName,
+              bio: profile.bio,
+              phoneNumber: profile.phoneNumber,
+            })
+          })
+          .catch(() => {})
+      }
 
       /*
        * Remove tokens from the URL before navigation so they don't appear

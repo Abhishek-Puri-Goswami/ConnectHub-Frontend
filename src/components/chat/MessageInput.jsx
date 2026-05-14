@@ -42,17 +42,26 @@ import { useState, useRef, useEffect, useCallback } from 'react'
 import { ws } from '../../services/websocket'
 import { api } from '../../services/api'
 import { useRateLimit } from '../../utils/useRateLimit'
+import { useChatStore } from '../../store/chatStore'
 import { Send, Paperclip, Smile, Loader2, X } from 'lucide-react'
 import EmojiPicker from './EmojiPicker'
+import { useToastStore } from '../../store/toastStore'
 import './MessageInput.css'
 
 export default function MessageInput({ onSend, roomId }) {
   const [text, setText] = useState('')
   const [uploading, setUploading] = useState(false)
   const [showEmoji, setShowEmoji] = useState(false)
+  // @mention state
+  const [mentionQuery, setMentionQuery] = useState(null) // null = closed, string = filter text
+  const [mentionIdx, setMentionIdx] = useState(0)
+  const addToast = useToastStore(state => state.addToast)
   const fileRef = useRef(null)
   const typingTimeout = useRef(null)
   const textareaRef = useRef(null)
+
+  // Get room members for @mention autocomplete
+  const roomMembers = useChatStore(s => s.members[roomId] || [])
 
   /*
    * Wrap api.uploadFile with useRateLimit so that if the upload limit is exceeded,
@@ -65,16 +74,20 @@ export default function MessageInput({ onSend, roomId }) {
     'uploads'
   )
 
-  /* Clear text and emoji picker when switching rooms */
+  /* Clear text, emoji picker, and mention dropdown when switching rooms */
   useEffect(() => {
     setText('')
     setShowEmoji(false)
-    if (textareaRef.current) textareaRef.current.style.height = 'auto'
+    setMentionQuery(null)
+    if (textareaRef.current) {
+      textareaRef.current.style.height = 'auto'
+      textareaRef.current.focus()
+    }
   }, [roomId])
 
-  /* Close emoji picker when Escape is pressed */
+  /* Close emoji picker when Escape is pressed; close mention on blur */
   useEffect(() => {
-    const handler = (e) => { if (e.key === 'Escape') setShowEmoji(false) }
+    const handler = (e) => { if (e.key === 'Escape') { setShowEmoji(false); setMentionQuery(null) } }
     window.addEventListener('keydown', handler)
     return () => window.removeEventListener('keydown', handler)
   }, [])
@@ -91,17 +104,62 @@ export default function MessageInput({ onSend, roomId }) {
   }
 
   /*
+   * Compute mention suggestions — members whose username starts with the current @query.
+   * capped at 6 to keep the dropdown small.
+   */
+  const mentionSuggestions = mentionQuery !== null
+    ? roomMembers
+        .filter(m => (m.username || '').toLowerCase().startsWith(mentionQuery.toLowerCase()))
+        .slice(0, 6)
+    : []
+
+  /*
    * handleChange — called on every keystroke.
    * Updates the text state, resizes the textarea, and sends a typing indicator.
-   * The typing timeout is reset on each keystroke and fires "stop typing" after 2.5s of silence.
+   * Also detects @-mentions: if the character before the cursor is `@word`, opens
+   * the mention dropdown filtered to `word`.
    */
   const handleChange = (e) => {
-    setText(e.target.value)
+    const val = e.target.value
+    setText(val)
     autoResize(e.target)
     ws.sendTyping(roomId, true)
     clearTimeout(typingTimeout.current)
     typingTimeout.current = setTimeout(() => ws.sendTyping(roomId, false), 2500)
+
+    // Detect @mention trigger: look at text up to cursor for `@word`
+    const cursor = e.target.selectionStart ?? val.length
+    const textBefore = val.slice(0, cursor)
+    const mentionMatch = textBefore.match(/@(\w*)$/)
+    if (mentionMatch) {
+      setMentionQuery(mentionMatch[1])
+      setMentionIdx(0)
+    } else {
+      setMentionQuery(null)
+    }
   }
+
+  /*
+   * insertMention — replaces the current @query in the textarea with @username.
+   * Finds the `@word` just before the cursor and replaces it, then closes the dropdown.
+   */
+  const insertMention = useCallback((username) => {
+    const ta = textareaRef.current
+    if (!ta) return
+    const cursor = ta.selectionStart ?? text.length
+    const before = text.slice(0, cursor)
+    const after = text.slice(cursor)
+    // Replace the trailing @query with the full @username + space
+    const replaced = before.replace(/@(\w*)$/, `@${username} `)
+    const next = replaced + after
+    setText(next)
+    setMentionQuery(null)
+    requestAnimationFrame(() => {
+      ta.focus()
+      ta.setSelectionRange(replaced.length, replaced.length)
+      autoResize(ta)
+    })
+  }, [text])
 
   /*
    * handleSubmit — sends the current text as a TEXT message.
@@ -115,6 +173,7 @@ export default function MessageInput({ onSend, roomId }) {
     onSend(trimmed, 'TEXT', null)
     setText('')
     setShowEmoji(false)
+    setMentionQuery(null)
     ws.sendTyping(roomId, false)
     clearTimeout(typingTimeout.current)
     if (textareaRef.current) {
@@ -123,8 +182,29 @@ export default function MessageInput({ onSend, roomId }) {
     }
   }
 
-  /* handleKeyDown — Enter sends, Shift+Enter adds a newline */
+  /* handleKeyDown — Enter sends, Shift+Enter adds a newline, Arrow/Enter/Esc navigates mention dropdown */
   const handleKeyDown = (e) => {
+    if (mentionQuery !== null && mentionSuggestions.length > 0) {
+      if (e.key === 'ArrowDown') {
+        e.preventDefault()
+        setMentionIdx(i => (i + 1) % mentionSuggestions.length)
+        return
+      }
+      if (e.key === 'ArrowUp') {
+        e.preventDefault()
+        setMentionIdx(i => (i - 1 + mentionSuggestions.length) % mentionSuggestions.length)
+        return
+      }
+      if (e.key === 'Enter' || e.key === 'Tab') {
+        e.preventDefault()
+        insertMention(mentionSuggestions[mentionIdx]?.username || mentionSuggestions[0]?.username)
+        return
+      }
+      if (e.key === 'Escape') {
+        setMentionQuery(null)
+        return
+      }
+    }
     if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSubmit() }
   }
 
@@ -145,7 +225,7 @@ export default function MessageInput({ onSend, roomId }) {
     } catch (err) {
       if (!err?.message?.includes('429') && !err?.message?.toLowerCase().includes('too many')) {
         console.error('Upload failed:', err)
-        alert('Upload Error: ' + err.message + '\n\nIf it says "Internal Server Error", it is usually because the AWS S3 credentials (AWS_ACCESS_KEY_ID) are missing or invalid in docker-compose.yml.')
+        addToast('Upload Error: ' + err.message, 'error')
       }
     } finally {
       setUploading(false)
@@ -176,6 +256,27 @@ export default function MessageInput({ onSend, roomId }) {
 
   return (
     <div className="mi-wrap">
+      {/* @mention autocomplete dropdown */}
+      {mentionQuery !== null && mentionSuggestions.length > 0 && (
+        <div className="mi-mention-list scale-in">
+          {mentionSuggestions.map((m, i) => (
+            <button
+              key={m.userId}
+              className={`mi-mention-item ${i === mentionIdx ? 'active' : ''}`}
+              onMouseDown={e => { e.preventDefault(); insertMention(m.username) }}
+            >
+              <span className="mi-mention-av">
+                {m.avatarUrl
+                  ? <img src={m.avatarUrl} alt={m.username} />
+                  : (m.username || '?').charAt(0).toUpperCase()}
+              </span>
+              <span className="mi-mention-name">{m.fullName || m.username}</span>
+              <span className="mi-mention-handle">@{m.username}</span>
+            </button>
+          ))}
+        </div>
+      )}
+
       {/* Emoji picker popup — floats above the input bar */}
       {showEmoji && (
         <div className="mi-emoji-pop scale-in">
@@ -249,11 +350,6 @@ export default function MessageInput({ onSend, roomId }) {
         </button>
       </div>
 
-      {/* Keyboard shortcut hints shown below the input */}
-      <div className="mi-hints">
-        <span><kbd>Enter</kbd> to send</span>
-        <span><kbd>Shift</kbd>+<kbd>Enter</kbd> for newline</span>
-      </div>
     </div>
   )
 }

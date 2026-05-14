@@ -12,7 +12,7 @@
  *   3. Quick actions — "Message" (new DM) and "Group" (new group) buttons
  *   4. Conversation list — one ConversationRow per room, sorted by lastMessageAt
  *   5. Footer — current user avatar + name, with a click to open profile settings
- *   6. Upgrade CTA / PRO badge — shown based on subscription status
+ *   6. Upgrade CTA / plan badge — shown based on subscription status
  *   7. Bottom bar — Settings and Logout buttons
  *
  * ConversationRow (inner component):
@@ -30,25 +30,35 @@
  * Props:
  *   wsConnected (boolean) — used to render the green/grey dot on the user's own avatar
  */
-import { useState, useEffect } from 'react'
+import { useState, useEffect, memo, useCallback, useMemo } from 'react'
 import { createPortal } from 'react-dom'
 import { useNavigate } from 'react-router-dom'
 import { useAuthStore } from '../../store/authStore'
 import { useChatStore } from '../../store/chatStore'
 import { usePaymentStore } from '../../store/paymentStore'
+import { usePresenceStore } from '../../store/presenceStore'
 import { api } from '../../services/api'
 import { enrichRoomMembers } from '../../utils/roomMembers'
 import {
   MessageCircle, Search, Plus, LogOut, Settings,
   Hash, Lock, MoreHorizontal, Users, X, Zap, Shield, CreditCard,
-  Check, CheckCheck
+  Check, CheckCheck, ChevronDown,
 } from 'lucide-react'
 import { formatDistanceToNowStrict, isToday, isYesterday, format } from 'date-fns'
 import CreateRoomModal from '../chat/CreateRoomModal'
 import ProfilePanel from '../chat/ProfilePanel'
 import ThemeToggle from '../../theme/ThemeToggle'
 import UpgradeModal from '../chat/UpgradeModal'
+import Avatar from '../common/Avatar'
+import { decodeHtml } from '../chat/MessageBubble'
 import './Sidebar.css'
+
+const STATUS_OPTIONS = [
+  { value: 'ONLINE',    label: 'Online',          cls: 'on'        },
+  { value: 'AWAY',      label: 'Away',            cls: 'away'      },
+  { value: 'DND',       label: 'Do Not Disturb',  cls: 'dnd'       },
+  { value: 'INVISIBLE', label: 'Invisible',        cls: 'invisible' },
+]
 
 export default function Sidebar({ wsConnected }) {
   const navigate = useNavigate()
@@ -60,12 +70,28 @@ export default function Sidebar({ wsConnected }) {
   const hasProSubscription = userRole === 'ADMIN' || userRole === 'PLATFORM_ADMIN'
     || (subscriptionStatus === 'ACTIVE' && subscription?.plan !== 'FREE')
 
+  const { userStatus, isAutoAway, setStatus: setPresenceStatus } = usePresenceStore()
+
   const [search, setSearch] = useState('')
   const [showCreate, setShowCreate] = useState(false)
   const [createTab, setCreateTab] = useState('dm')
   const [showProfile, setShowProfile] = useState(false)
   const [menuOpen, setMenuOpen] = useState(false)
   const [showProBenefits, setShowProBenefits] = useState(false)
+  const [statusPickerOpen, setStatusPickerOpen] = useState(false)
+  const [dmExpanded, setDmExpanded] = useState(true)
+  const [groupExpanded, setGroupExpanded] = useState(true)
+
+  const handleStatusChange = (status) => {
+    setStatusPickerOpen(false)
+    setPresenceStatus(user.userId, status)
+  }
+
+  const dotClass = !wsConnected ? 'off'
+    : userStatus === 'AWAY' ? 'away'
+    : userStatus === 'DND' ? 'dnd'
+    : userStatus === 'INVISIBLE' ? 'invisible'
+    : 'on'
 
   /* Close the floating "more" menu when Escape is pressed */
   useEffect(() => {
@@ -74,18 +100,23 @@ export default function Sidebar({ wsConnected }) {
     return () => window.removeEventListener('keydown', h)
   }, [])
 
-  /* Client-side filter — searches room name and description */
-  const filtered = rooms.filter(r =>
-    (r.name || '').toLowerCase().includes(search.toLowerCase()) ||
-    (r.description || '').toLowerCase().includes(search.toLowerCase())
-  )
+  /* Client-side filter — searches room name and description — memoized */
+  const filtered = useMemo(() =>
+    rooms.filter(r =>
+      (r.name || '').toLowerCase().includes(search.toLowerCase()) ||
+      (r.description || '').toLowerCase().includes(search.toLowerCase())
+    ), [rooms, search])
+
+  /* Split into DMs and Groups for sectioned rendering */
+  const filteredDMs     = useMemo(() => filtered.filter(r => r.type === 'DM'),    [filtered])
+  const filteredGroups  = useMemo(() => filtered.filter(r => r.type !== 'DM'),    [filtered])
 
   /* When clicking a room: activate it, clear its unread count, close mobile sidebar */
-  const handleRoomClick = (roomId) => {
+  const handleRoomClick = useCallback((roomId) => {
     setActiveRoom(roomId)
     useChatStore.getState().clearUnread(roomId)
     closeSidebar()
-  }
+  }, [setActiveRoom, closeSidebar])
 
   /* Logout: call the backend to invalidate the refresh token, then clear local state */
   const handleLogout = async () => {
@@ -161,29 +192,11 @@ export default function Sidebar({ wsConnected }) {
           )}
         </div>
 
-        {/* Quick action buttons — open CreateRoomModal pre-set to DM or Group tab */}
-        <div className="sb-actions">
-          <button
-            className="sb-action primary"
-            onClick={() => { setCreateTab('dm'); setShowCreate(true) }}
-          >
-            <MessageCircle size={15}/> Message
-          </button>
-          <button
-            className="sb-action"
-            onClick={() => { setCreateTab('group'); setShowCreate(true) }}
-          >
-            <Plus size={15}/> Group
-          </button>
-        </div>
-
-        {/* Conversation list — one row per room, or an empty state message */}
+        {/* Conversation list — sectioned by DM vs Group */}
         <div className="sb-list">
           {filtered.length === 0 ? (
             <div className="sb-empty">
-              <div className="sb-empty-badge">
-                <MessageCircle size={24}/>
-              </div>
+              <div className="sb-empty-badge"><MessageCircle size={24}/></div>
               <div className="sb-empty-title">
                 {search ? 'No conversations match' : 'No conversations yet'}
               </div>
@@ -192,31 +205,125 @@ export default function Sidebar({ wsConnected }) {
               </div>
             </div>
           ) : (
-            filtered.map(r => (
-              <ConversationRow
-                key={r.roomId}
-                room={r}
-                active={activeRoomId === r.roomId}
-                unread={unreadCounts[r.roomId] || 0}
-                onClick={() => handleRoomClick(r.roomId)}
-              />
-            ))
+            <>
+              {/* ── Direct Messages section ── */}
+              {filteredDMs.length > 0 && (
+                <>
+                  <div className="sb-section-header">
+                    <button
+                      className="sb-section-toggle"
+                      onClick={() => setDmExpanded(v => !v)}
+                      aria-expanded={dmExpanded}
+                    >
+                      <ChevronDown size={12} className={`sb-section-chevron ${dmExpanded ? '' : 'collapsed'}`}/>
+                      <MessageCircle size={12}/>
+                      <span>Direct messages</span>
+                      <span className="sb-section-count">{filteredDMs.length}</span>
+                    </button>
+                    <button
+                      className="sb-section-add"
+                      title="New direct message"
+                      onClick={() => { setCreateTab('dm'); setShowCreate(true) }}
+                    >
+                      <Plus size={12}/>
+                    </button>
+                  </div>
+                  {dmExpanded && filteredDMs.map(r => (
+                    <ConversationRow
+                      key={r.roomId}
+                      room={r}
+                      active={activeRoomId === r.roomId}
+                      unread={unreadCounts[r.roomId] || 0}
+                      onClick={() => handleRoomClick(r.roomId)}
+                    />
+                  ))}
+                </>
+              )}
+
+              {/* ── Groups section ── */}
+              {filteredGroups.length > 0 && (
+                <>
+                  <div className={`sb-section-header ${filteredDMs.length > 0 ? 'has-top-border' : ''}`}>
+                    <button
+                      className="sb-section-toggle"
+                      onClick={() => setGroupExpanded(v => !v)}
+                      aria-expanded={groupExpanded}
+                    >
+                      <ChevronDown size={12} className={`sb-section-chevron ${groupExpanded ? '' : 'collapsed'}`}/>
+                      <Users size={12}/>
+                      <span>Groups</span>
+                      <span className="sb-section-count">{filteredGroups.length}</span>
+                    </button>
+                    <button
+                      className="sb-section-add"
+                      title="New group"
+                      onClick={() => { setCreateTab('group'); setShowCreate(true) }}
+                    >
+                      <Plus size={12}/>
+                    </button>
+                  </div>
+                  {groupExpanded && filteredGroups.map(r => (
+                    <ConversationRow
+                      key={r.roomId}
+                      room={r}
+                      active={activeRoomId === r.roomId}
+                      unread={unreadCounts[r.roomId] || 0}
+                      onClick={() => handleRoomClick(r.roomId)}
+                    />
+                  ))}
+                </>
+              )}
+            </>
           )}
         </div>
 
-        {/* Footer: current user info with click-to-open profile panel */}
+        {/* Footer: avatar (click = status picker) + user info (click = profile) */}
         <div className="sb-footer">
-          <button className="sb-user" onClick={() => setShowProfile(true)}>
-            <div className="sb-user-av">
-              {user?.username?.[0]?.toUpperCase() || '?'}
-              {/* Green dot = WebSocket connected (online), grey = not connected */}
-              <span className={`sb-user-dot ${wsConnected ? 'on' : 'off'}`} title={wsConnected ? 'Online' : 'Connecting…'}/>
+          <div className="sb-user-card">
+            <div className="sb-status-wrap">
+              <button
+                className="sb-status-trigger"
+                onClick={() => setStatusPickerOpen(v => !v)}
+                title="Set status"
+                aria-expanded={statusPickerOpen}
+              >
+                <div className="sb-user-av-wrap">
+                  <Avatar src={user?.avatarUrl} name={user?.username || '?'} className="sb-user-av" />
+                  <span className={`sb-user-dot ${dotClass}`} title={dotClass === 'off' ? 'Connecting…' : STATUS_OPTIONS.find(o => o.cls === dotClass)?.label || 'Online'}/>
+                </div>
+              </button>
+              {statusPickerOpen && (
+                <>
+                  <div className="sb-status-backdrop" onClick={() => setStatusPickerOpen(false)} />
+                  <div className="sb-status-picker scale-in">
+                    <div className="sb-status-picker-title">Set status</div>
+                    {STATUS_OPTIONS.map(opt => (
+                      <button
+                        key={opt.value}
+                        className={`sb-status-option ${userStatus === opt.value ? 'active' : ''}`}
+                        onClick={() => handleStatusChange(opt.value)}
+                      >
+                        <span className={`sb-status-dot ${opt.cls}`} />
+                        {opt.label}
+                        {userStatus === opt.value && <Check size={13} style={{ marginLeft: 'auto', flexShrink: 0 }}/>}
+                      </button>
+                    ))}
+                  </div>
+                </>
+              )}
             </div>
-            <div className="sb-user-info">
-              <div className="sb-user-name">{user?.fullName || user?.username || 'You'}</div>
-              <div className="sb-user-handle">@{user?.username}</div>
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <button className="sb-user-info-btn" onClick={() => setShowProfile(true)}>
+                <div className="sb-user-name">{user?.fullName || user?.username || 'You'}</div>
+                <div className="sb-user-handle">@{user?.username}</div>
+              </button>
+              <button className="sb-status-text-btn" onClick={() => setStatusPickerOpen(v => !v)} title="Set status">
+                <span className={`sb-status-dot ${dotClass}`}/>
+                {STATUS_OPTIONS.find(o => o.value === userStatus)?.label || 'Online'}
+                {isAutoAway && <span style={{ fontSize: 10, opacity: 0.6, marginLeft: 2 }}>(auto)</span>}
+              </button>
             </div>
-          </button>
+          </div>
         </div>
 
         {/* Show "Upgrade to Premium" for FREE users, or a "Premium" badge for subscribers */}
@@ -294,9 +401,9 @@ function SidebarTick({ status, readBy, roomMembers, userId }) {
   return <span style={{ ...style, color: 'var(--text-muted)' }}><Check size={13}/></span>
 }
 
-function ConversationRow({ room, active, unread, onClick }) {
+const ConversationRow = memo(function ConversationRow({ room, active, unread, onClick }) {
   const { user } = useAuthStore()
-  const { messages, onlineUsers, members: allMembers } = useChatStore()
+  const { messages, onlineUsers, presenceStatuses, members: allMembers } = useChatStore()
   const cachedMembers = allMembers[room.roomId]
   const isDM = room.type === 'DM'
 
@@ -310,6 +417,7 @@ function ConversationRow({ room, active, unread, onClick }) {
     room.name?.startsWith('DM-') ? room.name.substring(3) : (room.name || 'Direct message')
   )
   const [dmOtherId, setDmOtherId] = useState(null)
+  const [dmAvatarUrl, setDmAvatarUrl] = useState(null)
 
   useEffect(() => {
     if (!isDM) return
@@ -325,6 +433,7 @@ function ConversationRow({ room, active, unread, onClick }) {
         if (!cancelled && other) {
           setDmName(other.fullName || other.username || `User ${other.userId}`)
           setDmOtherId(other.userId)
+          setDmAvatarUrl(other.avatarUrl)
         }
       } catch {}
     }
@@ -349,9 +458,9 @@ function ConversationRow({ room, active, unread, onClick }) {
     ? (lastMsg.isDeleted ? 'Message deleted'
       : lastMsg.type === 'IMAGE' ? '📷 Photo'
       : lastMsg.type === 'FILE' ? '📎 File'
-      : (lastMsg.content || '').replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&quot;/g, '"').replace(/&#39;/g, "'"))
-    : room.lastMessagePreview
-      || (unread > 0 ? 'New message' : (isDM ? 'Start a conversation' : (room.description || (room.isPrivate ? 'Private channel' : 'Public channel'))))
+      : decodeHtml(lastMsg.content || ''))
+    : decodeHtml(room.lastMessagePreview || '')
+      || (unread > 0 ? 'New message' : (isDM ? 'Start a conversation' : (room.description || (room.isPrivate ? 'Private group' : 'Public group'))))
 
   /* Build the relative time label from the last message or room's lastMessageAt */
   const ts = lastMsg?.sentAt || lastMsg?.timestamp || room.lastMessageAt
@@ -359,16 +468,19 @@ function ConversationRow({ room, active, unread, onClick }) {
     : new Date(s.endsWith('Z') || s.includes('+') ? s : s + 'Z')
   const timeLabel = ts ? formatRelative(parseTs(ts)) : ''
 
-  /* For DMs, show an online dot if the other user is currently online */
+  /* For DMs, show a status dot reflecting the other user's presence status */
   const isOtherOnline = isDM && dmOtherId && onlineUsers.has(dmOtherId)
+  const otherStatus = isDM && dmOtherId ? (presenceStatuses[dmOtherId] || (isOtherOnline ? 'ONLINE' : null)) : null
+  // Dot class: null → no dot, else colored by status
+  const dotStatusClass = otherStatus === 'AWAY' ? 'away'
+    : otherStatus === 'DND' ? 'dnd'
+    : otherStatus === 'INVISIBLE' ? null // invisible users appear offline
+    : otherStatus === 'ONLINE' ? '' // default green
+    : null
 
   /* Delivery ticks — only for our own last message */
   const isOwnLastMsg = lastMsg && lastMsg.senderId === user?.userId
   const roomMembers = cachedMembers || []
-
-  /* Deterministic color from room name — same room always gets same color */
-  const colorPalette = ['#FF8E72','#7AC9A7','#B8A4F4','#FFB547','#6BCEEA','#F47174']
-  const avColor = colorPalette[(name.charCodeAt(0) || 0) % colorPalette.length]
 
   return (
     <button
@@ -377,15 +489,13 @@ function ConversationRow({ room, active, unread, onClick }) {
     >
       <div className="sb-row-av-wrap">
         {isDM ? (
-          <div className="sb-row-av" style={{ background: avColor }}>
-            {initial}
-          </div>
+          <Avatar src={dmAvatarUrl} name={name} className="sb-row-av" />
         ) : (
           <div className="sb-row-av group">
             {room.isPrivate ? <Lock size={15}/> : <Hash size={15}/>}
           </div>
         )}
-        {isOtherOnline && <span className="sb-row-dot"/>}
+        {dotStatusClass !== null && <span className={`sb-row-dot ${dotStatusClass}`}/>}
       </div>
       <div className="sb-row-body">
         <div className="sb-row-top">
@@ -401,7 +511,7 @@ function ConversationRow({ room, active, unread, onClick }) {
       </div>
     </button>
   )
-}
+})
 
 /*
  * formatRelative(date) — returns a human-readable relative time string.
