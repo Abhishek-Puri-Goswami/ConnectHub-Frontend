@@ -1,75 +1,73 @@
 /*
- * ForgotPasswordPage.jsx — Password Reset via Email OTP (3-Step Flow)
+ * ForgotPasswordPage.jsx — Password Reset via Email or Phone OTP (3-Step Flow)
  *
  * Purpose:
  *   Allows users who forgot their password to reset it securely.
- *   The flow has three sequential steps:
- *     Step 1 — Email: user enters the email linked to their account.
- *     Step 2 — OTP: user enters the 6-digit reset code sent to their email.
- *     Step 3 — New password: user sets and confirms a new password.
+ *   The user can choose to receive the reset code via email OR via SMS
+ *   to their registered phone number.
  *
- * How the reset token works:
- *   When the OTP is verified in Step 2, the backend returns a short-lived
- *   resetToken (a signed string, not a full JWT). This token is stored in
- *   component state and passed to the resetPassword API in Step 3.
- *   The token proves the user successfully verified their email without
- *   needing to keep the OTP itself around.
+ * Mode toggle:
+ *   A two-button selector on Step 1 lets the user pick "Email" or "Phone".
+ *   Switching mode resets step back to 1 and clears all form state.
  *
- * Step navigation:
- *   The `step` state (1, 2, or 3) controls which UI panel is shown with
- *   a `{step === N && (...)}` conditional render. The Back button goes to
- *   the previous step (or /login from step 1).
+ * Flow steps (identical for both modes):
+ *   Step 1 — Identifier: email address or phone number input.
+ *   Step 2 — OTP: 6-digit code sent to the chosen channel.
+ *   Step 3 — New password: set and confirm a new strong password.
  *
- * Cooldown timer:
- *   After sending the OTP in Step 1, a 60-second cooldown is applied so
- *   the Resend button cannot be clicked repeatedly. A setInterval ticks
- *   the countdown down each second.
+ * OTP verification:
+ *   Email mode — calls /auth/forgot-password    → /auth/verify-reset-otp
+ *   Phone mode — calls /auth/forgot-password/phone → /auth/verify-reset-otp/phone
+ *   Both return a short-lived resetToken that authorises /auth/reset-password.
  *
- * Auto-verify on 6th OTP digit:
- *   A useEffect watches the `otp` state. When it reaches 6 characters while
- *   we're on step 2, verifyOtp() is called automatically.
+ * Phone input:
+ *   A static "+91" prefix (matching RegisterPage) is shown beside the input.
+ *   The raw 10-digit digits are stored in state; the full E.164 number
+ *   (+91XXXXXXXXXX) is assembled before API calls.
  *
- * Password validation in Step 3:
- *   isPasswordValid() checks all five password rules (length, upper, lower,
- *   digit, symbol). The submit button is disabled unless the password is
- *   strong enough AND the two password fields match.
- *   PasswordStrengthMeter shows a visual indicator below the password field.
- *
- * After successful reset:
- *   A green success message is shown and the user is redirected to /login
- *   after 1.6 seconds so they can sign in with the new password.
+ * Cooldown timer, auto-verify on 6th digit, password strength meter, and
+ * redirect-on-success work identically to the original email-only version.
  */
 import { useState, useEffect } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { api } from '../../services/api'
 import {
-  ArrowLeft, Loader2, Check, X, Eye, EyeOff, Mail, Lock, ShieldCheck, KeyRound
+  ArrowLeft, Loader2, Check, X, Eye, EyeOff,
+  Mail, Phone, Lock, ShieldCheck, KeyRound,
 } from 'lucide-react'
 import AuthLayout from './AuthLayout'
 import OtpInput from './OtpInput'
 import PasswordStrengthMeter from './PasswordStrengthMeter'
-import { validateEmail, isPasswordValid, maskEmail } from '../../utils/validators'
+import {
+  validateEmail, isPasswordValid, maskEmail,
+  normalizePhone, validatePhone, maskPhone,
+} from '../../utils/validators'
 import './AuthStyles.css'
 
 export default function ForgotPasswordPage() {
   const navigate = useNavigate()
 
   /*
-   * step — controls which of the three panels is displayed:
-   *   1 = email input form
-   *   2 = OTP entry form
+   * mode — which channel the reset code is sent through.
+   * Switching between modes clears all state and resets to step 1.
+   */
+  const [mode, setMode] = useState('email') // 'email' | 'phone'
+
+  /*
+   * step — controls which panel is shown:
+   *   1 = identifier (email or phone) input
+   *   2 = OTP entry
    *   3 = new password form
    */
   const [step, setStep] = useState(1)
-  const [email, setEmail] = useState('')
-  const [otp, setOtp] = useState('')
 
-  /*
-   * resetToken — a temporary token returned by the backend after OTP verification.
-   * It is passed to the resetPassword API to authorize the password change.
-   * It is never stored in localStorage; losing it (page reload) means the user
-   * must start the flow again from step 1.
-   */
+  /* Email mode fields */
+  const [email, setEmail] = useState('')
+
+  /* Phone mode fields — raw digits only; prefix (+91) is prepended on submission */
+  const [phone, setPhone] = useState('')
+
+  const [otp, setOtp] = useState('')
   const [resetToken, setResetToken] = useState('')
   const [newPassword, setNewPassword] = useState('')
   const [confirmPassword, setConfirmPassword] = useState('')
@@ -81,7 +79,21 @@ export default function ForgotPasswordPage() {
   const [loading, setLoading] = useState(false)
   const [cooldown, setCooldown] = useState(0)
 
-  /* Cooldown countdown — ticks every second, stops at 0 */
+  /* Switch mode — clear everything and return to step 1 */
+  const switchMode = (m) => {
+    if (m === mode) return
+    setMode(m)
+    setStep(1)
+    setEmail('')
+    setPhone('')
+    setOtp('')
+    setResetToken('')
+    setError('')
+    setSuccess('')
+    setCooldown(0)
+  }
+
+  /* Cooldown countdown — ticks every second */
   useEffect(() => {
     if (cooldown <= 0) return
     const t = setInterval(() => setCooldown(c => c - 1), 1000)
@@ -89,33 +101,47 @@ export default function ForgotPasswordPage() {
   }, [cooldown])
 
   /*
-   * sendOtp — validates the email format, calls the backend to send the reset code,
-   * then advances to step 2 and starts a 60-second resend cooldown.
+   * sendOtp — validates the identifier, calls the appropriate backend endpoint,
+   * advances to step 2, and starts a 60-second resend cooldown.
    */
   const sendOtp = async (e) => {
     e?.preventDefault()
-    const err = validateEmail(email)
-    if (err) { setError(err); return }
-    setError(''); setLoading(true)
+    setError('')
+
+    if (mode === 'email') {
+      const err = validateEmail(email)
+      if (err) { setError(err); return }
+    } else {
+      const err = validatePhone(phone)
+      if (err) { setError(err); return }
+    }
+
+    setLoading(true)
     try {
-      await api.forgotPassword(email)
+      if (mode === 'email') {
+        await api.forgotPassword(email)
+      } else {
+        await api.forgotPasswordByPhone('+91' + phone)
+      }
       setStep(2); setCooldown(60); setOtp('')
     } catch (err) { setError(err.message || 'Could not send code') }
     finally { setLoading(false) }
   }
 
   /*
-   * verifyOtp — submits the 6-digit code to the backend's verify-reset-otp endpoint.
-   * The backend returns `{ data: "<reset_token_string>" }` on success.
-   * We extract and store the token, then advance to step 3.
-   * If the token is missing in the response (unexpected backend error), we throw
-   * a descriptive error so the user knows to retry.
+   * verifyOtp — submits the 6-digit code to the appropriate verify endpoint.
+   * Both endpoints return `{ data: "<reset_token>" }` on success.
    */
   const verifyOtp = async () => {
     if (otp.length !== 6) return
     setError(''); setLoading(true)
     try {
-      const res = await api.verifyResetOtp({ email, otp })
+      let res
+      if (mode === 'email') {
+        res = await api.verifyResetOtp({ email, otp })
+      } else {
+        res = await api.verifyPhoneResetOtp({ phoneNumber: '+91' + phone, otp })
+      }
       const token = res?.data
       if (!token) throw new Error('No reset token received — please try again')
       setResetToken(token)
@@ -124,17 +150,15 @@ export default function ForgotPasswordPage() {
     finally { setLoading(false) }
   }
 
-  /*
-   * Auto-verify effect — fires when the user types the 6th OTP digit on step 2.
-   * The `step === 2` guard prevents this from firing on other steps if otp is
-   * still set from a previous attempt.
-   */
-  useEffect(() => { if (step === 2 && otp.length === 6 && !loading) verifyOtp() /* eslint-disable-next-line */ }, [otp])
+  /* Auto-verify when the user types the 6th OTP digit */
+  useEffect(() => {
+    if (step === 2 && otp.length === 6 && !loading) verifyOtp()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [otp])
 
   /*
-   * resetPassword — validates that the new password meets requirements and
-   * that both fields match, then calls the backend with the resetToken.
-   * On success, shows a confirmation message and redirects to /login after 1.6s.
+   * resetPassword — validates the new password and submits with the resetToken.
+   * On success, shows a confirmation then navigates to /login.
    */
   const resetPassword = async (e) => {
     e?.preventDefault()
@@ -149,12 +173,14 @@ export default function ForgotPasswordPage() {
     finally { setLoading(false) }
   }
 
-  /* passwordsMatch — derived bool used to show/hide the green "Passwords match" hint */
   const passwordsMatch = newPassword && confirmPassword === newPassword
+
+  /* Masked display of the chosen identifier for Step 2 */
+  const maskedIdentifier = mode === 'email' ? maskEmail(email) : maskPhone('+91' + phone)
 
   return (
     <AuthLayout tagline="Reset your password securely">
-      {/* Back button — goes one step back or to /login from step 1 */}
+      {/* Back button */}
       <button
         className="auth-back-btn"
         onClick={() => step === 1 ? navigate('/login') : setStep(s => s - 1)}
@@ -162,7 +188,7 @@ export default function ForgotPasswordPage() {
         <ArrowLeft size={14}/> Back
       </button>
 
-      {/* ── Step 1: Email input ─────────────────────────────────────────── */}
+      {/* ── Step 1: Identifier input ──────────────────────────────────────── */}
       {step === 1 && (
         <div className="fade-in">
           <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', textAlign: 'center', marginBottom: 20 }}>
@@ -176,31 +202,74 @@ export default function ForgotPasswordPage() {
             </div>
             <h2 className="auth-title">Forgot password?</h2>
             <p className="auth-subtitle" style={{ marginBottom: 0 }}>
-              Enter your email and we'll send you a reset code
+              {mode === 'email'
+                ? "Enter your email and we'll send you a reset code"
+                : "Enter your phone number and we'll send you a reset code"}
             </p>
           </div>
 
+          {/* Mode toggle */}
+          <div className="auth-mode-toggle" style={{ marginBottom: 18 }}>
+            <button
+              type="button"
+              className={`auth-mode-btn ${mode === 'email' ? 'active' : ''}`}
+              onClick={() => switchMode('email')}
+            >
+              <Mail size={14}/> Email
+            </button>
+            <button
+              type="button"
+              className={`auth-mode-btn ${mode === 'phone' ? 'active' : ''}`}
+              onClick={() => switchMode('phone')}
+            >
+              <Phone size={14}/> Phone
+            </button>
+          </div>
+
           <form onSubmit={sendOtp}>
-            <div className="form-group">
-              <label className="form-label">
-                <Mail size={13} style={{ display: 'inline', verticalAlign: '-2px', marginRight: 4, color: 'var(--primary)' }}/>
-                Email address
-              </label>
-              <input
-                className="form-input" type="email" placeholder="you@example.com"
-                value={email} onChange={e => setEmail(e.target.value)} autoFocus
-              />
-            </div>
+            {mode === 'email' ? (
+              <div className="form-group">
+                <label className="form-label">
+                  <Mail size={13} style={{ display: 'inline', verticalAlign: '-2px', marginRight: 4, color: 'var(--primary)' }}/>
+                  Email address
+                </label>
+                <input
+                  className="form-input" type="email" placeholder="you@example.com"
+                  value={email} onChange={e => setEmail(e.target.value)} autoFocus
+                />
+              </div>
+            ) : (
+              <div className="form-group">
+                <label className="form-label">
+                  <Phone size={13} style={{ display: 'inline', verticalAlign: '-2px', marginRight: 4, color: 'var(--primary)' }}/>
+                  Phone number
+                </label>
+                <div className="phone-input-wrap">
+                  <span className="phone-prefix">🇮🇳 +91</span>
+                  <input
+                    className="form-input"
+                    type="tel"
+                    inputMode="numeric"
+                    placeholder="98765 43210"
+                    value={phone}
+                    onChange={e => setPhone(normalizePhone(e.target.value))}
+                    autoFocus
+                  />
+                </div>
+              </div>
+            )}
+
             {error && <p className="error-text" style={{ marginBottom: 10 }}><X size={14}/> {error}</p>}
+
             <button type="submit" className="btn btn-primary btn-block" disabled={loading}>
-              {loading ? <Loader2 size={18} className="spin"/> : <Mail size={18}/>}
+              {loading ? <Loader2 size={18} className="spin"/> : mode === 'email' ? <Mail size={18}/> : <Phone size={18}/>}
               {loading ? 'Sending code…' : 'Send reset code'}
             </button>
           </form>
         </div>
       )}
 
-      {/* ── Step 2: OTP entry ───────────────────────────────────────────── */}
+      {/* ── Step 2: OTP entry ──────────────────────────────────────────────── */}
       {step === 2 && (
         <div className="fade-in">
           <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', textAlign: 'center', marginBottom: 20 }}>
@@ -213,13 +282,12 @@ export default function ForgotPasswordPage() {
               <ShieldCheck size={28}/>
             </div>
             <h2 className="auth-title">Enter the code</h2>
-            {/* maskEmail shows a privacy-masked version of the address */}
             <p className="auth-subtitle" style={{ marginBottom: 0 }}>
-              Sent to <strong style={{ color: 'var(--text)' }}>{maskEmail(email)}</strong>
+              {mode === 'email' ? 'Sent to your email ' : 'Sent via SMS to '}
+              <strong style={{ color: 'var(--text)' }}>{maskedIdentifier}</strong>
             </p>
           </div>
 
-          {/* 6-box OTP input with keyboard navigation and paste support */}
           <OtpInput value={otp} onChange={setOtp} />
 
           {error && <p className="error-text" style={{ justifyContent: 'center' }}><X size={14}/> {error}</p>}
@@ -234,15 +302,15 @@ export default function ForgotPasswordPage() {
             {loading ? 'Verifying…' : 'Verify code'}
           </button>
 
-          {/* Resend section — shows cooldown timer, then a clickable Resend link */}
           <div className="otp-timer" style={{ marginTop: 14 }}>
-            {cooldown > 0 ? <>Resend in <strong>{cooldown}s</strong></>
+            {cooldown > 0
+              ? <>Resend in <strong>{cooldown}s</strong></>
               : <button className="auth-link" onClick={sendOtp}>Resend code</button>}
           </div>
         </div>
       )}
 
-      {/* ── Step 3: New password form ───────────────────────────────────── */}
+      {/* ── Step 3: New password form ─────────────────────────────────────── */}
       {step === 3 && (
         <div className="fade-in">
           <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', textAlign: 'center', marginBottom: 20 }}>
@@ -276,7 +344,6 @@ export default function ForgotPasswordPage() {
                   {showPw ? <EyeOff size={17}/> : <Eye size={17}/>}
                 </button>
               </div>
-              {/* Show strength meter as soon as the user starts typing */}
               {newPassword && <PasswordStrengthMeter password={newPassword} />}
             </div>
 
@@ -303,7 +370,6 @@ export default function ForgotPasswordPage() {
             {error && <p className="error-text" style={{ marginBottom: 10 }}><X size={14}/> {error}</p>}
             {success && <p className="success-text" style={{ marginBottom: 10 }}><Check size={14}/> {success}</p>}
 
-            {/* Button is disabled until both password requirements and match are satisfied */}
             <button
               type="submit" className="btn btn-primary btn-block"
               disabled={loading || !passwordsMatch || !isPasswordValid(newPassword)}

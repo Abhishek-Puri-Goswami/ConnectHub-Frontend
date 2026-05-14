@@ -1,4 +1,4 @@
-/* UpgradeModal.css — Premium upgrade modal */
+/* UpgradeModal.css — Premium & Platinum upgrade modal */
 
 .upgrade-overlay {
   position: fixed;
@@ -26,6 +26,12 @@
   animation: slideUp 0.25s cubic-bezier(0.175, 0.885, 0.32, 1.275);
 }
 
+/* Wider card for two-plan layout */
+.upgrade-card--wide {
+  width: min(500px, 94vw);
+  padding: 1.1rem 1.4rem 1.4rem;
+}
+
 .upgrade-close {
   position: absolute;
   top: 1rem;
@@ -41,6 +47,7 @@
   width: 32px;
   height: 32px;
   transition: all 0.15s;
+  z-index: 2;
 }
 .upgrade-close:hover {
   background: var(--surface-hover, #F0E5D3);
@@ -50,27 +57,19 @@
 /* ── Hero ──────────────────────────────────────── */
 .upgrade-hero {
   text-align: center;
-  margin-bottom: 1rem;
+  margin-bottom: 0.9rem;
 }
-
-.upgrade-icon-wrap {
-  width: 44px;
-  height: 44px;
-  background: linear-gradient(135deg, #7C3AED, #A855F7);
-  border-radius: 12px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  margin: 0 auto 0.65rem;
-  box-shadow: 0 0 18px rgba(124, 58, 237, 0.4);
-}
-.upgrade-icon { color: #fff; }
 
 .upgrade-title {
   font-size: 1.1rem;
   font-weight: 700;
   color: var(--text, #2D2438);
-  margin: 0 0 0.35rem;
+  margin: 0 0 0.2rem;
+}
+.upgrade-subtitle {
+  font-size: 0.78rem;
+  color: var(--text-muted, #8B7F9E);
+  margin: 0;
 }
 .upgrade-reason {
   font-size: 0.78rem;
@@ -80,37 +79,120 @@
   padding: 0.3rem 0.6rem;
   margin-bottom: 0.5rem;
 }
-.upgrade-price { margin: 0; }
-.upgrade-amount {
-  font-size: 1.6rem;
+
+/* ── Plan cards grid ──────────────────────────── */
+.upgrade-plans {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.65rem;
+  margin-bottom: 0.85rem;
+}
+
+.upgrade-plan-card {
+  background: var(--surface-2, #FAF6EF);
+  border: 2px solid var(--border, #EADFC9);
+  border-radius: 12px;
+  padding: 0.8rem;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  position: relative;
+  text-align: left;
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+}
+.upgrade-plan-card:hover {
+  border-color: rgba(124, 58, 237, 0.3);
+  transform: translateY(-1px);
+  box-shadow: 0 4px 16px rgba(124, 58, 237, 0.1);
+}
+.upgrade-plan-card.selected.premium {
+  border-color: #7C3AED;
+  background: rgba(124, 58, 237, 0.04);
+  box-shadow: 0 0 0 1px rgba(124, 58, 237, 0.2), 0 4px 20px rgba(124, 58, 237, 0.12);
+}
+.upgrade-plan-card.selected.platinum {
+  border-color: #D97706;
+  background: rgba(217, 119, 6, 0.04);
+  box-shadow: 0 0 0 1px rgba(217, 119, 6, 0.2), 0 4px 20px rgba(217, 119, 6, 0.12);
+}
+
+/* POPULAR badge */
+.upgrade-plan-badge {
+  position: absolute;
+  top: -9px;
+  right: 12px;
+  background: linear-gradient(135deg, #D97706, #F59E0B);
+  color: #fff;
+  font-size: 0.62rem;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  padding: 2px 8px;
+  border-radius: 6px;
+  text-transform: uppercase;
+}
+
+.upgrade-plan-header {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  color: var(--text, #2D2438);
+}
+.upgrade-plan-card.premium .upgrade-plan-header { color: #7C3AED; }
+.upgrade-plan-card.platinum .upgrade-plan-header { color: #D97706; }
+
+.upgrade-plan-name {
+  font-size: 0.9rem;
+  font-weight: 700;
+}
+
+.upgrade-plan-price {
+  display: flex;
+  align-items: baseline;
+  gap: 0.25rem;
+}
+.upgrade-plan-amount {
+  font-size: 1.25rem;
   font-weight: 800;
   color: var(--text, #2D2438);
 }
-.upgrade-period {
-  font-size: 0.82rem;
-  color: var(--text-soft, #5D5170);
+.upgrade-plan-period {
+  font-size: 0.68rem;
+  color: var(--text-muted, #8B7F9E);
 }
 
-/* ── Features list ─────────────────────────────── */
-.upgrade-features {
+/* Feature list inside plan card */
+.upgrade-plan-features {
   list-style: none;
-  margin: 0 0 1.1rem;
   padding: 0;
+  margin: 0;
   display: flex;
   flex-direction: column;
-  gap: 0.35rem;
+  gap: 0.15rem;
 }
-.upgrade-features li {
+.upgrade-plan-features li {
   display: flex;
   align-items: center;
-  gap: 0.5rem;
-  font-size: 0.8rem;
+  gap: 0.3rem;
+  font-size: 0.69rem;
   color: var(--text-soft, #5D5170);
 }
-.upgrade-check {
-  color: #7C3AED;
-  flex-shrink: 0;
+.upgrade-plan-card.premium .upgrade-plan-features li svg { color: #7C3AED; }
+.upgrade-plan-card.platinum .upgrade-plan-features li svg { color: #D97706; }
+
+/* Selected indicator */
+.upgrade-plan-selected-indicator {
+  display: flex;
+  align-items: center;
+  gap: 0.3rem;
+  font-size: 0.68rem;
+  font-weight: 700;
+  margin-top: 0.2rem;
+  padding-top: 0.3rem;
+  border-top: 1px solid var(--border, #EADFC9);
 }
+.upgrade-plan-card.premium .upgrade-plan-selected-indicator { color: #7C3AED; }
+.upgrade-plan-card.platinum .upgrade-plan-selected-indicator { color: #D97706; }
 
 /* ── Error ─────────────────────────────────────── */
 .upgrade-error {
@@ -126,7 +208,7 @@
 /* ── CTA button ────────────────────────────────── */
 .upgrade-btn {
   width: 100%;
-  padding: 0.7rem;
+  padding: 0.6rem;
   border-radius: 10px;
   background: linear-gradient(135deg, #7C3AED, #A855F7);
   color: #fff;
@@ -141,9 +223,16 @@
   transition: all 0.2s;
   box-shadow: 0 4px 20px rgba(124, 58, 237, 0.35);
 }
+.upgrade-btn.platinum {
+  background: linear-gradient(135deg, #D97706, #F59E0B);
+  box-shadow: 0 4px 20px rgba(217, 119, 6, 0.35);
+}
 .upgrade-btn:hover:not(:disabled) {
   transform: translateY(-1px);
   box-shadow: 0 8px 28px rgba(124, 58, 237, 0.5);
+}
+.upgrade-btn.platinum:hover:not(:disabled) {
+  box-shadow: 0 8px 28px rgba(217, 119, 6, 0.5);
 }
 .upgrade-btn:disabled {
   opacity: 0.65;
@@ -161,7 +250,7 @@
   gap: 0.35rem;
 }
 
-/* ── Premium badge (already-premium view) ──────── */
+/* ── Premium badge (already-subscribed view) ────── */
 .upgrade-pro-badge {
   display: inline-flex;
   align-items: center;
@@ -173,6 +262,9 @@
   font-size: 0.8rem;
   font-weight: 700;
   margin-bottom: 1rem;
+}
+.upgrade-pro-badge.platinum {
+  background: linear-gradient(135deg, #D97706, #F59E0B);
 }
 .upgrade-sub {
   color: var(--text-soft, #5D5170);
@@ -262,7 +354,7 @@
   animation: fadeSlideUp 0.4s ease 0.3s both;
 }
 
-/* Green "Start using Premium" button */
+/* Green "Start using" button */
 .upgrade-done-btn {
   margin-top: 0.25rem;
   background: linear-gradient(135deg, #16a34a, #22C55E);
@@ -271,6 +363,17 @@
 }
 .upgrade-done-btn:hover:not(:disabled) {
   box-shadow: 0 8px 28px rgba(34, 197, 94, 0.5);
+}
+
+/* ── Responsive: stack on small screens ────────── */
+@media (max-width: 480px) {
+  .upgrade-card--wide {
+    width: 94vw;
+    padding: 1rem 0.9rem 1.1rem;
+  }
+  .upgrade-plans {
+    grid-template-columns: 1fr;
+  }
 }
 
 /* ── Dark theme ────────────────────────────────── */
@@ -291,8 +394,26 @@
   background: rgba(255,255,255,0.12);
   color: var(--text, #fff);
 }
+[data-theme='dark'] .upgrade-plan-card {
+  background: rgba(255,255,255,0.04);
+  border-color: rgba(255,255,255,0.1);
+}
+[data-theme='dark'] .upgrade-plan-card:hover {
+  border-color: rgba(124, 58, 237, 0.4);
+}
+[data-theme='dark'] .upgrade-plan-card.selected.premium {
+  background: rgba(124, 58, 237, 0.08);
+  border-color: #7C3AED;
+}
+[data-theme='dark'] .upgrade-plan-card.selected.platinum {
+  background: rgba(217, 119, 6, 0.08);
+  border-color: #D97706;
+}
 [data-theme='dark'] .upgrade-activating-pill {
   background: rgba(255,255,255,0.07);
+  border-color: rgba(255,255,255,0.1);
+}
+[data-theme='dark'] .upgrade-plan-selected-indicator {
   border-color: rgba(255,255,255,0.1);
 }
 

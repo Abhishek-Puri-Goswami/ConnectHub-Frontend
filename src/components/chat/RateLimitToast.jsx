@@ -5,7 +5,7 @@
  *   A non-blocking notification system that shows toast alerts when the user hits
  *   a rate limit. Rendered once in ChatLayout and listens to two types of events:
  *
- *   1. "guestLimitExceeded" (CustomEvent) — dispatched by websocket.js when the
+ *   1. "rateLimitExceeded" (CustomEvent) — dispatched by websocket.js when the
  *      WebSocket server rejects a message frame with reason LIMIT_EXCEEDED.
  *      Indicates the user has hit the message rate limit for their tier.
  *
@@ -19,7 +19,7 @@
  *   - Debounced: the same action type can only trigger a new toast every 10 seconds,
  *     preventing spam when many requests are rejected in quick succession.
  *   - Up to 3 toasts visible at once; oldest are removed when the limit is exceeded.
- *   - Each toast includes an "Upgrade to PRO" button that opens the UpgradeModal,
+ *   - Each toast includes an "Upgrade" button that opens the UpgradeModal,
  *     giving the user an immediate path to increase their rate limits.
  *
  * Sub-component:
@@ -73,7 +73,7 @@ export default function RateLimitToast() {
 
   /*
    * Listen for WebSocket rate limit events.
-   * The "guestLimitExceeded" event is fired by websocket.js when the backend
+   * The "rateLimitExceeded" event is fired by websocket.js when the backend
    * sends an error frame with reason LIMIT_EXCEEDED on the personal error queue.
    */
   useEffect(() => {
@@ -84,8 +84,8 @@ export default function RateLimitToast() {
         : `${ACTION_LABELS[action] || 'Your request'} was rate-limited.`
       addToast(action || 'messages', limit, msg)
     }
-    window.addEventListener('guestLimitExceeded', handler)
-    return () => window.removeEventListener('guestLimitExceeded', handler)
+    window.addEventListener('rateLimitExceeded', handler)
+    return () => window.removeEventListener('rateLimitExceeded', handler)
   }, [addToast])
 
   /*
@@ -135,14 +135,14 @@ export default function RateLimitToast() {
 /*
  * RateLimitToastItem — a single toast card with countdown progress bar.
  *
- * Renders the alert icon, message text, "Upgrade to PRO" button, and a dismiss button.
+ * Renders the alert icon, message text, "Upgrade" button, and a dismiss button.
  * The progress bar drains from 100% to 0% over TOAST_DURATION_MS using a 50ms interval,
  * giving the user a visual countdown so they know when the toast will disappear.
  *
  * Props:
  *   toast     — { id, action, limit, message }
  *   onDismiss — called when the X button is clicked
- *   onUpgrade — called when "Upgrade to PRO" is clicked
+ *   onUpgrade — called when "Upgrade" is clicked
  */
 function RateLimitToastItem({ toast, onDismiss, onUpgrade }) {
   const [progress, setProgress] = useState(100)
@@ -182,9 +182,9 @@ function RateLimitToastItem({ toast, onDismiss, onUpgrade }) {
           <X size={14} />
         </button>
       </div>
-      {/* Upgrade CTA — opens UpgradeModal to let the user subscribe to PRO */}
+      {/* Upgrade CTA — opens UpgradeModal to let the user subscribe to Premium */}
       <button className="rate-toast-upgrade" onClick={onUpgrade}>
-        <Zap size={12} /> Upgrade to PRO for higher limits
+        <Zap size={12} /> Upgrade to Premium for higher limits
       </button>
       {/* Countdown progress bar */}
       <div className="rate-toast-progress">

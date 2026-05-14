@@ -2,7 +2,6 @@ import { test, expect } from '@playwright/test'
 import {
   mockPasswordLogin,
   mockPasswordLoginFailure,
-  mockGuestLogin,
   mockSendEmailOtp,
   mockVerifyEmailOtp,
   mockChatApis,
@@ -29,8 +28,7 @@ test.describe('Login Page', () => {
     await expect(page.getByRole('button', { name: /Phone/i })).toBeVisible()
     await expect(page.getByRole('button', { name: /Password/i })).toBeVisible()
 
-    // Guest and register links
-    await expect(page.getByRole('button', { name: /Continue as Guest/i })).toBeVisible()
+    // Register link
     await expect(page.getByRole('link', { name: /Create one/i })).toBeVisible()
   })
 
@@ -219,25 +217,6 @@ test.describe('Login Page', () => {
 
     await page.getByRole('button', { name: /^Email$/i }).click()
     await expect(page.locator('.error-text')).not.toBeVisible()
-  })
-
-  // ── Guest login ───────────────────────────────────────────────────────────
-
-  test('logs in as guest and navigates to chat', async ({ page }) => {
-    await mockGuestLogin(page)
-    await mockChatApis(page)
-
-    await page.getByRole('button', { name: /Continue as Guest/i }).click()
-    await expect(page).toHaveURL(/\/chat/)
-  })
-
-  test('shows error on guest login failure', async ({ page }) => {
-    await page.route('**/api/v1/auth/guest', (route) => {
-      route.fulfill({ status: 400, json: { success: false, message: 'Guest login failed' } })
-    })
-
-    await page.getByRole('button', { name: /Continue as Guest/i }).click()
-    await expect(page.locator('.error-text')).toContainText('Guest login failed')
   })
 
   // ── OAuth2 buttons ────────────────────────────────────────────────────────

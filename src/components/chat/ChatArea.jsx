@@ -28,7 +28,7 @@
  *   SkeletonRow   — placeholder rows shown while messages are loading
  *   DaySeparator  — the "Today" / "Yesterday" / date divider between message groups
  */
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useRef, useState, useMemo, useCallback } from 'react'
 import { useAuthStore } from '../../store/authStore'
 import { useChatStore } from '../../store/chatStore'
 import { api } from '../../services/api'
@@ -45,7 +45,8 @@ import {
   Menu, Info, Search, ArrowDown,
   Hash, Lock, Settings, Pin, Users, X, Loader2, Image as ImageIcon
 } from 'lucide-react'
-import { format, isToday, isYesterday } from 'date-fns'
+import { format, isToday, isYesterday, formatDistanceToNow } from 'date-fns'
+import Avatar from '../common/Avatar'
 import './ChatArea.css'
 
 /*
@@ -83,13 +84,14 @@ export default function ChatArea({ wsConnected }) {
     activeRoomId, rooms, messages, setMessages, addMessage, prependMessages,
     editMessage, deleteMessage, deleteMessageForMe, setTyping, clearTyping, setMembers, members,
     incrementUnread, clearUnread, toggleSidebar, typingUsers, applyReactionEvent,
-    onlineUsers, markMessagesRead, updateDeliveryStatus,
+    onlineUsers, presenceStatuses, markMessagesRead, updateDeliveryStatus, pinMessage, unpinMessage,
   } = useChatStore()
 
   const room = rooms.find(r => r.roomId === activeRoomId)
   const roomMessages = messages[activeRoomId] || []
   const roomTyping = typingUsers[activeRoomId] || {}
   const roomMembers = members[activeRoomId] || []
+  const isRoomAdmin = roomMembers.find(m => m.userId === user?.userId)?.role === 'ADMIN'
 
   /*
    * For DM rooms: resolve the name and identity of the other participant.
@@ -97,9 +99,13 @@ export default function ChatArea({ wsConnected }) {
    */
   let headerName = room?.name || 'Chat'
   let otherMember = null
+  let dmAvatarUrl = null
   if (room?.type === 'DM') {
     otherMember = roomMembers.find(m => m.userId !== user?.userId)
-    if (otherMember) headerName = otherMember.fullName || otherMember.username || `User ${otherMember.userId}`
+    if (otherMember) {
+      headerName = otherMember.fullName || otherMember.username || `User ${otherMember.userId}`
+      dmAvatarUrl = otherMember.avatarUrl
+    }
     else if (room.name?.startsWith('DM-')) headerName = room.name.substring(3)
   }
 
@@ -108,8 +114,14 @@ export default function ChatArea({ wsConnected }) {
   const palette = ['#FF8E72','#7AC9A7','#B8A4F4','#FFB547','#6BCEEA','#F47174']
   const avColor = palette[(headerName.charCodeAt(0) || 0) % palette.length]
 
-  /* Online status for the DM header subtitle and info panel */
+  /* Presence for the DM header — uses precise status from presenceStatuses map */
   const isOtherOnline = otherMember && onlineUsers.has(otherMember.userId)
+  const otherPresenceStatus = otherMember ? (presenceStatuses[otherMember.userId] || (isOtherOnline ? 'ONLINE' : 'OFFLINE')) : 'OFFLINE'
+  // Dot CSS class for the DM header avatar
+  const dmDotClass = otherPresenceStatus === 'AWAY' ? 'away'
+    : otherPresenceStatus === 'DND' ? 'dnd'
+    : otherPresenceStatus === 'INVISIBLE' ? 'invisible'
+    : '' // default green (ONLINE)
   const typingEntries = Object.entries(roomTyping).filter(([id]) => String(id) !== String(user?.userId))
 
   const messagesEndRef = useRef(null)
@@ -126,6 +138,7 @@ export default function ChatArea({ wsConnected }) {
   const [toast, setToast] = useState(null)
   const [showMediaGallery, setShowMediaGallery] = useState(false)
   const [infoMessage, setInfoMessage] = useState(null)
+  const [dmLastSeen, setDmLastSeen] = useState(null)
 
   /* showToast — shows a temporary status message at the top of the chat area for 2.5 seconds */
   const showToast = (msg, kind = 'ok') => {
@@ -165,6 +178,7 @@ export default function ChatArea({ wsConnected }) {
     if (!activeRoomId) return
     setLoading(true)
     setPinnedMsg(null)
+    setDmLastSeen(null)
     Promise.all([
       api.getMessages(activeRoomId),
       api.getRoomMembers(activeRoomId).then(enrichRoomMembers)
@@ -187,6 +201,16 @@ export default function ChatArea({ wsConnected }) {
       // Reset Redis counter via REST — reliable regardless of WS connection state.
       api.resetWsUnreadCount(user?.userId, activeRoomId).catch(() => {})
       api.markRoomRead(activeRoomId, user?.userId).catch(() => {})
+      // For DMs: fetch the partner's presence to display "last seen" when offline
+      const currentRoom = rooms.find(r => r.roomId === activeRoomId)
+      if (currentRoom?.type === 'DM') {
+        const other = mems.find(m => m.userId !== user?.userId)
+        if (other?.userId) {
+          api.getPresence(other.userId)
+            .then(p => { if (p?.lastPingAt) setDmLastSeen(p.lastPingAt) })
+            .catch(() => {})
+        }
+      }
     }).catch(console.error).finally(() => setLoading(false))
     clearUnread(activeRoomId)
   }, [activeRoomId])
@@ -235,31 +259,48 @@ export default function ChatArea({ wsConnected }) {
         if (data.messageId && data.senderId != null && data.emoji)
           applyReactionEvent(data.messageId, data.senderId, data.emoji, data.action || 'ADD')
       },
+      onPin: (data) => {
+        if (data.messageId) {
+          pinMessage(activeRoomId, data.messageId)
+          // Update the pinned bar with the newly pinned message
+          const msgs = messages[activeRoomId] || []
+          const pinned = msgs.find(m => m.messageId === data.messageId)
+          if (pinned) setPinnedMsg(pinned)
+        } else {
+          unpinMessage(activeRoomId)
+          setPinnedMsg(null)
+        }
+      },
     })
     return () => ws.unsubscribeFromRoom(activeRoomId)
   }, [wsConnected, activeRoomId])
 
   /* scrollToBottom — scrolls the message list to the last message */
-  const scrollToBottom = (behavior = 'smooth') =>
-    messagesEndRef.current?.scrollIntoView({ behavior })
+  const scrollToBottom = useCallback((behavior = 'smooth') =>
+    messagesEndRef.current?.scrollIntoView({ behavior }), [])
 
   /* isNearBottom — true if the user is within 180px of the bottom of the scroll container */
-  const isNearBottom = () => {
+  const isNearBottom = useCallback(() => {
     const el = messagesContainerRef.current
     return !el || el.scrollHeight - el.scrollTop - el.clientHeight < 180
-  }
+  }, [])
 
   /*
-   * handleScroll — called on every scroll event.
+   * handleScroll — debounced scroll handler to avoid excessive layout reads.
    * Shows/hides the "jump to bottom" button.
    * Triggers loadMore() when the user scrolls within 80px of the top.
    */
-  const handleScroll = () => {
-    const el = messagesContainerRef.current
-    if (!el) return
-    setShowScrollBtn(!isNearBottom())
-    if (el.scrollTop < 80 && hasMore && !loadingMore) loadMore()
-  }
+  const scrollTimerRef = useRef(null)
+  const handleScroll = useCallback(() => {
+    if (scrollTimerRef.current) return
+    scrollTimerRef.current = requestAnimationFrame(() => {
+      scrollTimerRef.current = null
+      const el = messagesContainerRef.current
+      if (!el) return
+      setShowScrollBtn(!isNearBottom())
+      if (el.scrollTop < 80 && hasMore && !loadingMore) loadMore()
+    })
+  }, [hasMore, loadingMore, isNearBottom])
 
   /*
    * loadMore — fetches the next page of older messages.
@@ -288,41 +329,53 @@ export default function ChatArea({ wsConnected }) {
 
   /*
    * handleSend — sends a new message via WebSocket.
-   * The content, type (TEXT/IMAGE/FILE), and optional mediaUrl are passed from MessageInput.
-   * If the WebSocket is disconnected, shows an error toast.
    */
-  const handleSend = (content, type = 'TEXT', mediaUrl = null) => {
+  const handleSend = useCallback((content, type = 'TEXT', mediaUrl = null) => {
     const sent = ws.sendMessage(activeRoomId, content, type, replyTo?.messageId, mediaUrl)
     setReplyTo(null)
     if (!sent) showToast('Reconnecting… message not sent', 'err')
-  }
+  }, [activeRoomId, replyTo])
 
   /*
    * handleEdit — saves a message edit via both REST and WebSocket.
-   * The REST call persists it to the database. The WebSocket publish broadcasts
-   * the change to all other room members instantly.
    */
-  const handleEdit = async (msg, newContent) => {
+  const handleEdit = useCallback(async (msg, newContent) => {
     try {
       await api.editMessage(msg.messageId, newContent)
       ws.sendEdit(activeRoomId, msg.messageId, newContent)
       showToast('Message edited')
     } catch (e) { console.error('Edit failed:', e); showToast('Edit failed', 'err') }
-  }
+  }, [activeRoomId])
 
-  /* handleDeleteForEveryone — soft-deletes on backend + broadcasts via WebSocket so all clients show the placeholder */
-  const handleDeleteForEveryone = async (msg) => {
+  /* handleDeleteForEveryone */
+  const handleDeleteForEveryone = useCallback(async (msg) => {
     try {
       await api.deleteMessage(msg.messageId)
       ws.sendDelete(activeRoomId, msg.messageId)
       showToast('Message deleted')
     } catch (e) { console.error('Delete failed:', e); showToast('Delete failed', 'err') }
-  }
+  }, [activeRoomId])
 
-  /* handleDeleteForMe — removes message only from local store (session-only, no broadcast) */
-  const handleDeleteForMe = (msg) => {
+  /* handleDeleteForMe */
+  const handleDeleteForMe = useCallback((msg) => {
     deleteMessageForMe(activeRoomId, msg.messageId)
-  }
+  }, [activeRoomId, deleteMessageForMe])
+
+  /*
+   * handlePin — pins or unpins a message via WebSocket.
+   * Sends the appropriate STOMP frame and optimistically updates the pinned bar state.
+   */
+  const handlePin = useCallback((msg) => {
+    if (msg.isPinned) {
+      ws.sendUnpin(activeRoomId)
+      setPinnedMsg(null)
+      unpinMessage(activeRoomId)
+    } else {
+      ws.sendPin(activeRoomId, msg.messageId)
+      setPinnedMsg(msg)
+      pinMessage(activeRoomId, msg.messageId)
+    }
+  }, [activeRoomId, pinMessage, unpinMessage])
 
   /*
    * Group messages by day and determine cluster boundaries.
@@ -330,8 +383,10 @@ export default function ChatArea({ wsConnected }) {
    *   - The sender changes, OR
    *   - More than 5 minutes have passed since the previous message
    * Only the first message in a cluster gets showAvatar=true.
+   * Memoized so it only recomputes when roomMessages actually changes.
    */
-  const groupedMessages = []
+  const groupedMessages = useMemo(() => {
+  const result = []
   let lastDate = null
   roomMessages.forEach((msg, i) => {
     const msgDate = msg.sentAt ? new Date(msg.sentAt)
@@ -339,7 +394,7 @@ export default function ChatArea({ wsConnected }) {
       : new Date()
     const dateStr = format(msgDate, 'yyyy-MM-dd')
     if (dateStr !== lastDate) {
-      groupedMessages.push({ type: 'separator', date: msgDate, key: `sep-${dateStr}` })
+      result.push({ type: 'separator', date: msgDate, key: `sep-${dateStr}` })
       lastDate = dateStr
     }
     const prev = roomMessages[i - 1]
@@ -347,11 +402,13 @@ export default function ChatArea({ wsConnected }) {
       : prev?.timestamp ? new Date(prev.timestamp).getTime() : 0
     const msgTime = msgDate.getTime()
     const newCluster = !prev || prev.senderId !== msg.senderId || (msgTime - prevTime > 300000)
-    groupedMessages.push({
+    result.push({
       type: 'message', msg, showAvatar: newCluster,
       key: msg.messageId || `msg-${i}-${msgTime}`
     })
   })
+  return result
+  }, [roomMessages])
 
   /*
    * subtitle — the text shown below the room name in the header.
@@ -360,6 +417,12 @@ export default function ChatArea({ wsConnected }) {
    */
   const subtitle = room?.type === 'DM'
     ? (typingEntries.length > 0 ? 'typing…'
+      : otherPresenceStatus === 'AWAY' ? 'Away'
+      : otherPresenceStatus === 'DND' ? 'Do Not Disturb'
+      : (otherPresenceStatus === 'INVISIBLE' || (!isOtherOnline && otherPresenceStatus !== 'ONLINE'))
+          ? (dmLastSeen
+              ? `Last seen ${formatDistanceToNow(new Date(dmLastSeen.endsWith('Z') || dmLastSeen.includes('+') ? dmLastSeen : dmLastSeen + 'Z'), { addSuffix: true })}`
+              : 'Offline')
       : isOtherOnline ? 'Active now'
       : 'Offline')
     : `${roomMembers.length} members${typingEntries.length > 0 ? ' · typing…' : ''}`
@@ -381,10 +444,12 @@ export default function ChatArea({ wsConnected }) {
 
         <div className="ca-head-av-wrap">
           {room?.type === 'DM' ? (
-            <div className="ca-head-av" style={{ background: avColor }}>
-              {initial}
-              {isOtherOnline && <span className="ca-head-av-dot"/>}
-            </div>
+            <>
+              <Avatar src={dmAvatarUrl} name={headerName} className="ca-head-av" />
+              {(isOtherOnline || otherPresenceStatus === 'AWAY' || otherPresenceStatus === 'DND') && (
+                <span className={`ca-head-av-dot ${dmDotClass}`}/>
+              )}
+            </>
           ) : (
             <div className="ca-head-av group">
               {room?.isPrivate ? <Lock size={18}/> : <Hash size={18}/>}
@@ -469,12 +534,14 @@ export default function ChatArea({ wsConnected }) {
                     message={item.msg}
                     roomId={activeRoomId}
                     isOwn={item.msg.senderId === user?.userId}
+                    isRoomAdmin={isRoomAdmin}
                     showAvatar={item.showAvatar}
                     onReply={() => setReplyTo(item.msg)}
                     onEdit={(content) => handleEdit(item.msg, content)}
                     onDelete={() => handleDeleteForEveryone(item.msg)}
                     onDeleteForMe={() => handleDeleteForMe(item.msg)}
                     onInfo={() => setInfoMessage(item.msg)}
+                    onPin={() => handlePin(item.msg)}
                   />
                 )
               })
@@ -487,7 +554,10 @@ export default function ChatArea({ wsConnected }) {
           {typingEntries.length > 0 && (
             <TypingIndicator users={typingEntries.map(([id, v]) => {
               const m = roomMembers.find(rm => String(rm.userId) === String(id))
-              return m?.fullName || m?.username || v.username
+              return {
+                name: m?.fullName || m?.username || v.username,
+                avatarUrl: m?.avatarUrl
+              }
             })} />
           )}
 
@@ -536,15 +606,28 @@ export default function ChatArea({ wsConnected }) {
             {room?.type === 'DM' && otherMember ? (
               /* DM contact info: avatar, name, online status, email, phone, settings button */
               <div className="ca-info-dm">
-                <div className="ca-info-dm-av" style={{ background: avColor }}>
-                  {initial}
-                  {isOtherOnline && <span className="ca-head-av-dot"/>}
+                <div className="ca-info-dm-av-wrap">
+                  <Avatar src={dmAvatarUrl} name={headerName} className="ca-info-dm-av" />
+                  {(isOtherOnline || otherPresenceStatus === 'AWAY' || otherPresenceStatus === 'DND') && (
+                    <span className={`ca-head-av-dot ${dmDotClass}`}/>
+                  )}
                 </div>
                 <div className="ca-info-dm-name">{headerName}</div>
                 <div className="ca-info-dm-handle">@{otherMember.username}</div>
+                {otherMember.bio && (
+                  <div className="ca-info-dm-bio">{otherMember.bio}</div>
+                )}
                 <div className="ca-info-dm-status">
-                  <span className={`ca-status-pill ${isOtherOnline ? 'on' : 'off'}`}>
-                    {isOtherOnline ? 'Active now' : 'Offline'}
+                  <span className={`ca-status-pill ${
+                    otherPresenceStatus === 'AWAY' ? 'away'
+                    : otherPresenceStatus === 'DND' ? 'dnd'
+                    : isOtherOnline ? 'on'
+                    : 'off'
+                  }`}>
+                    {otherPresenceStatus === 'AWAY' ? 'Away'
+                      : otherPresenceStatus === 'DND' ? 'Do Not Disturb'
+                      : isOtherOnline ? 'Active now'
+                      : subtitle.startsWith('Last seen') ? subtitle : 'Offline'}
                   </span>
                 </div>
                 {otherMember.email && (
@@ -587,13 +670,18 @@ export default function ChatArea({ wsConnected }) {
                     const disp = getMemberDisplay(m)
                     const isYou = m.userId === user?.userId
                     const nameDisp = isYou ? 'You' : disp.primary
-                    const isOnline = onlineUsers.has(m.userId) || m.status === 'ONLINE'
+                    const mPresence = (presenceStatuses[m.userId] || (onlineUsers.has(m.userId) ? 'ONLINE' : 'OFFLINE')).toUpperCase()
+                    const mDotCls = mPresence === 'AWAY' ? 'away'
+                      : mPresence === 'DND' ? 'dnd'
+                      : mPresence === 'INVISIBLE' ? 'off'
+                      : mPresence === 'ONLINE' ? 'on'
+                      : 'off'
                     const mColor = palette[(String(disp.primary).charCodeAt(0) || 0) % palette.length]
                     return (
                       <div key={m.userId || m.id} className="ca-member-row">
-                        <div className="ca-member-av" style={{ background: mColor }}>
-                          {(nameDisp[0] || '?').toUpperCase()}
-                          <span className={`ca-member-dot ${isOnline ? 'on' : 'off'}`}/>
+                        <div className="ca-member-av-wrap">
+                          <Avatar src={m.avatarUrl} name={nameDisp} className="ca-member-av" />
+                          <span className={`ca-member-dot ${mDotCls}`}/>
                         </div>
                         <div className="ca-member-info">
                           <div className="ca-member-name">
@@ -611,14 +699,7 @@ export default function ChatArea({ wsConnected }) {
                   style={{ margin: '12px 16px 16px', width: 'calc(100% - 32px)' }}
                   onClick={() => setShowRoomSettings(true)}
                 >
-                  <Settings size={14}/> Channel settings
-                </button>
-                <button
-                  className="btn btn-ghost btn-block"
-                  style={{ margin: '8px 16px 16px', width: 'calc(100% - 32px)' }}
-                  onClick={() => setShowMediaGallery(true)}
-                >
-                  <ImageIcon size={14}/> View shared media
+                  <Settings size={14}/> Group settings
                 </button>
               </>
             )}

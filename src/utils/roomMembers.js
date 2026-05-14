@@ -44,16 +44,31 @@ export async function enrichRoomMembers(rawMembers) {
       .filter(userId => userId != null)
   )]
 
-  const profiles = await Promise.all(uniqueUserIds.map(async (userId) => {
-    try {
-      const profile = await api.getProfile(userId)
-      return [userId, profile]
-    } catch {
-      return [userId, null]
-    }
-  }))
+  let profileMap = new Map()
 
-  const profileMap = new Map(profiles.filter(([, profile]) => profile))
+  try {
+    // Use the batch endpoint — one request for all members instead of N individual calls.
+    // Falls back to individual fetches if the batch endpoint fails.
+    const profiles = await api.getUsersByIds(uniqueUserIds)
+    if (Array.isArray(profiles)) {
+      profiles.forEach(profile => {
+        if (profile?.userId != null) profileMap.set(profile.userId, profile)
+        // Some backends key by 'id' instead of 'userId'
+        else if (profile?.id != null) profileMap.set(profile.id, profile)
+      })
+    }
+  } catch {
+    // Batch failed — fall back to individual fetches
+    const results = await Promise.all(uniqueUserIds.map(async (userId) => {
+      try {
+        const profile = await api.getProfile(userId)
+        return [userId, profile]
+      } catch {
+        return [userId, null]
+      }
+    }))
+    profileMap = new Map(results.filter(([, profile]) => profile))
+  }
 
   return rawMembers.map(member => {
     const profile = profileMap.get(member.userId)
@@ -63,8 +78,10 @@ export async function enrichRoomMembers(rawMembers) {
       ...member,
       username: profile.username || member.username,
       fullName: profile.fullName || member.fullName,
-      avatarUrl: profile.avatarUrl || member.avatarUrl,
+      // Normalise: some backends return 'avatarUrl', others 'avatar' or 'profilePicture'
+      avatarUrl: profile.avatarUrl || profile.avatar || profile.profilePicture || member.avatarUrl || null,
       status: profile.status || member.status,
+      bio: profile.bio || member.bio || null,
     }
   })
 }

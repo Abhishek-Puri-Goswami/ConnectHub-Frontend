@@ -21,7 +21,7 @@
  *      edits, deletes, and reactions for a specific chat room.
  *   2. Presence subscription (/topic/presence) — receive online/offline events for any user.
  *   3. Personal queue (/user/{id}/queue/messages) — receive messages only meant for this
- *      user (e.g., DM delivery confirmations, guest limit errors).
+ *      user (e.g., DM delivery confirmations, rate limit errors).
  *   4. Notification queue (/user/{id}/queue/notifications) — receive real-time notification
  *      events (e.g., "someone mentioned you").
  *
@@ -69,6 +69,7 @@ class WebSocketService {
     this.notificationCallbacks = new Map();
     this.notificationSubscriptions = new Map();
     this.stateListeners = new Set();
+    this.broadcastSubscription = null;
     this.connected = false;
     this._token = null;
     this._connectPromise = null;
@@ -211,6 +212,11 @@ class WebSocketService {
         callbacks.onReaction?.(JSON.parse(msg.body)),
       ),
     );
+    subs.push(
+      this.client.subscribe("/topic/room/" + roomId + "/pin", (msg) =>
+        callbacks.onPin?.(JSON.parse(msg.body)),
+      ),
+    );
     this.roomSubscriptions.set(roomId, subs);
   }
 
@@ -270,7 +276,7 @@ class WebSocketService {
             const err = JSON.parse(msg.body);
             if (err.reason === "LIMIT_EXCEEDED") {
               window.dispatchEvent(
-                new CustomEvent("guestLimitExceeded", { detail: err }),
+                new CustomEvent("rateLimitExceeded", { detail: err }),
               );
             }
           } catch (e) {}
@@ -421,6 +427,33 @@ class WebSocketService {
   }
 
   /*
+   * sendPin(roomId, messageId) — pins a message in the room.
+   * The backend updates the room's pinned message reference and broadcasts the pin event
+   * to /topic/room/{roomId}/pin so all members see the pinned bar update instantly.
+   */
+  sendPin(roomId, messageId) {
+    if (!this.connected) return false;
+    this.client.publish({
+      destination: "/app/chat.pin",
+      body: JSON.stringify({ roomId, messageId }),
+    });
+    return true;
+  }
+
+  /*
+   * sendUnpin(roomId) — removes the pinned message from the room.
+   * Broadcasts a pin event with messageId=null so all clients clear the pinned bar.
+   */
+  sendUnpin(roomId) {
+    if (!this.connected) return false;
+    this.client.publish({
+      destination: "/app/chat.unpin",
+      body: JSON.stringify({ roomId }),
+    });
+    return true;
+  }
+
+  /*
    * restoreSubscriptions() — called by onConnect after every (re)connection.
    *
    * When the WebSocket reconnects (e.g. after a network drop), all STOMP subscription
@@ -458,7 +491,7 @@ class WebSocketService {
             const err = JSON.parse(msg.body);
             if (err.reason === "LIMIT_EXCEEDED") {
               window.dispatchEvent(
-                new CustomEvent("guestLimitExceeded", { detail: err }),
+                new CustomEvent("rateLimitExceeded", { detail: err }),
               );
             }
           } catch (e) {}
@@ -494,6 +527,14 @@ class WebSocketService {
         ),
       );
     }
+
+    /* Platform broadcast — all connected clients subscribe to /topic/broadcast */
+    if (this.broadcastSubscription) this.broadcastSubscription.unsubscribe();
+    this.broadcastSubscription = this.client.subscribe("/topic/broadcast", (msg) => {
+      try {
+        window.dispatchEvent(new CustomEvent("platformBroadcast", { detail: JSON.parse(msg.body) }));
+      } catch (e) {}
+    });
   }
 
   /*
@@ -518,6 +559,10 @@ class WebSocketService {
       subscription.unsubscribe(),
     );
     this.notificationSubscriptions.clear();
+    if (this.broadcastSubscription) {
+      this.broadcastSubscription.unsubscribe();
+      this.broadcastSubscription = null;
+    }
   }
 
   /*

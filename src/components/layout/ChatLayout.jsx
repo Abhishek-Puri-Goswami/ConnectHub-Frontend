@@ -32,11 +32,15 @@
  *   after the TTL expires in Redis.
  */
 import { useEffect, useRef, useState } from 'react'
+import { useToastStore } from '../../store/toastStore'
 import { useAuthStore } from '../../store/authStore'
 import { useChatStore } from '../../store/chatStore'
 import { usePaymentStore } from '../../store/paymentStore'
+import { usePresenceStore } from '../../store/presenceStore'
+import { useIdleDetector } from '../../hooks/useIdleDetector'
 import { api } from '../../services/api'
 import { ws } from '../../services/websocket'
+import { initForegroundListener } from '../../services/firebase'
 import Sidebar from './Sidebar'
 import ChatArea from '../chat/ChatArea'
 import EmptyState from '../chat/EmptyState'
@@ -45,18 +49,52 @@ import './ChatLayout.css'
 
 export default function ChatLayout() {
   const { token, user } = useAuthStore()
-  const { activeRoomId, setRooms, setOnline, setOffline, sidebarOpen, closeSidebar } = useChatStore()
+  const { activeRoomId, setRooms, setOnline, setOffline, setPresenceStatus, sidebarOpen, closeSidebar } = useChatStore()
   const { fetchSubscription } = usePaymentStore()
   const [wsConnected, setWsConnected] = useState(false)
   const pingRef = useRef(null)
 
+  // Idle detection: auto-AWAY after 5 min, restore on activity
+  useIdleDetector(user?.userId)
+
+  /*
+   * FCM foreground listener — fires when a push message arrives while the tab
+   * is open. Firebase suppresses the OS notification in this case, so we show
+   * the content as an in-app toast instead so the user never misses it.
+   * The unsubscribe function is returned from initForegroundListener and cleaned
+   * up on unmount (or if the user logs out).
+   */
+  useEffect(() => {
+    const unsubscribe = initForegroundListener((title, body) => {
+      useToastStore.getState().addToast(`${title}: ${body}`, 'info', 6000)
+    })
+    return () => { if (unsubscribe) unsubscribe() }
+  }, [])
+
   /*
    * Fetch the user's subscription tier once on login.
    * This populates paymentStore.subscription so the Sidebar can show the
-   * "Upgrade to PRO" button or the "PRO" badge, and so rate limits are applied correctly.
+   * "Upgrade" button or the plan badge, and so rate limits are applied correctly.
+   * Also refreshes the user's own profile to ensure avatarUrl is always current.
    */
   useEffect(() => {
-    if (user) fetchSubscription()
+    if (user) {
+      fetchSubscription()
+      // Refresh profile in background — ensures avatarUrl from a previous session
+      // or OAuth login is always hydrated into the store
+      if (user.userId) {
+        api.getProfile(user.userId)
+          .then(profile => {
+            if (profile) useAuthStore.getState().updateUser({
+              avatarUrl: profile.avatarUrl || profile.avatar || profile.profilePicture || user.avatarUrl,
+              fullName: profile.fullName || user.fullName,
+              bio: profile.bio,
+              phoneNumber: profile.phoneNumber,
+            })
+          })
+          .catch(() => {})
+      }
+    }
   }, [user?.userId])
 
   /*
@@ -66,6 +104,9 @@ export default function ChatLayout() {
    */
   useEffect(() => {
     if (!user) return
+
+    // Hydrate the user's own presence status from the backend
+    usePresenceStore.getState().initStatus(user.userId)
 
     /*
      * Listen for WebSocket connection state changes.
@@ -105,7 +146,13 @@ export default function ChatLayout() {
               if (!msg || msg.isDeleted) return
               const preview = msg.type === 'IMAGE' ? '📷 Photo'
                 : msg.type === 'FILE' ? '📎 File'
-                : (msg.content || '').replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&quot;/g, '"').replace(/&#39;/g, "'")
+                : (() => {
+                    try {
+                      let t = (msg.content || '').replace(/&amp;/g,'&').replace(/&lt;/g,'<').replace(/&gt;/g,'>').replace(/&quot;/g,'"').replace(/&#39;/g,"'").replace(/&#x27;/g,"'")
+                      const doc = new DOMParser().parseFromString(t, 'text/html')
+                      return (doc.documentElement.textContent || t).substring(0, 200)
+                    } catch { return (msg.content || '').substring(0, 200) }
+                  })()
               if (preview) state.updateRoomPreview(room.roomId, preview, msg.senderId)
             })
             .catch(() => {})
@@ -119,8 +166,15 @@ export default function ChatLayout() {
      * so presence dots in the sidebar and member list update in real time.
      */
     ws.subscribeToPresence(p => {
-      if (p.status === 'ONLINE') setOnline(p.userId)
-      else setOffline(p.userId)
+      const status = (p.status || '').toUpperCase()
+      // INVISIBLE users appear offline to others; ONLINE/AWAY/DND remain in the online set
+      if (status === 'INVISIBLE' || status === 'OFFLINE' || (!status && !p.online)) {
+        setOffline(p.userId)
+      } else {
+        setOnline(p.userId)
+      }
+      // Always store the precise status so UI can show AWAY/DND/INVISIBLE dots
+      if (p.userId != null) setPresenceStatus(p.userId, status || (p.online ? 'ONLINE' : 'OFFLINE'))
     })
 
     /*
@@ -137,6 +191,20 @@ export default function ChatLayout() {
         return
       }
       state.addMessage(msg.roomId, msg)
+
+      /*
+       * Keep the sidebar preview in sync whenever a message arrives on the personal
+       * queue. subscribeToNotifications only fires for the offline Kafka path, so
+       * online recipients who receive messages here would otherwise see a stale
+       * "Start a conversation" preview until they refresh.
+       */
+      if (msg.senderId !== user.userId) {
+        const preview = msg.type === 'IMAGE' ? '📷 Photo'
+          : msg.type === 'FILE' ? '📎 File'
+          : (msg.content || '').substring(0, 200)
+        if (preview) state.updateRoomPreview(msg.roomId, preview, msg.senderId)
+      }
+
       const roomExists = state.rooms.find(r => r.roomId === msg.roomId)
       if (!roomExists) {
         api.getUserRooms(user.userId)
@@ -164,10 +232,14 @@ export default function ChatLayout() {
       }
       if (notif.type === 'NEW_MESSAGE' && notif.roomId) {
         const state = useChatStore.getState()
-        if (state.activeRoomId !== notif.roomId || document.hidden) {
+        const isDND = usePresenceStore.getState().userStatus === 'DND'
+        // Always update the sidebar preview so content stays current.
+        // When DND is active, skip incrementing the unread badge — the user
+        // has signalled they don't want to be interrupted. Counts resume the
+        // moment they switch away from DND.
+        if (!isDND && (state.activeRoomId !== notif.roomId || document.hidden)) {
           state.incrementUnread(notif.roomId)
         }
-        // Keep sidebar preview current even for rooms not yet opened this session
         if (notif.message) {
           state.updateRoomPreview(notif.roomId, notif.message, notif.actorId)
         }

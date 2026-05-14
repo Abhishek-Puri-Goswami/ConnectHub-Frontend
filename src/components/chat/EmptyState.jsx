@@ -1,42 +1,39 @@
 /*
  * EmptyState.jsx — Welcome Screen (No Room Selected)
  *
- * Purpose:
- *   Shown in the right panel of ChatLayout when no room is currently open.
- *   Displays the app name, a brief description, a feature highlights list,
- *   and keyboard shortcut hints.
+ * Shown when activeRoomId is null:
+ *   - Right after login
+ *   - After a room is deleted
+ *   - On mobile when sidebar is open
  *
- * When is it shown?
- *   ChatLayout renders EmptyState when activeRoomId is null. This happens:
- *   - Right after login, before the user clicks any room.
- *   - After a room is deleted and the user is no longer in any room.
- *   - On mobile, when the sidebar is open and no room is selected.
+ * CTA buttons open CreateRoomModal directly from this screen so new
+ * users have an immediate path to their first conversation.
  *
- * Mobile header:
- *   On mobile, the sidebar overlays the chat area. The EmptyState renders a
- *   minimal header with a hamburger menu button (openSidebar) so the user can
- *   open the sidebar without having a chat area header to click.
- *
- * Feature highlights:
- *   Three cards briefly explain the main capabilities:
- *   - Instant messaging (real-time + typing indicators)
- *   - Group rooms (channels with admin controls)
- *   - Secure & private (OAuth2 + encrypted sessions)
- *
- * Keyboard shortcuts reference:
- *   A compact shortcut cheatsheet at the bottom — Ctrl+F for search,
- *   Enter to send, Shift+Enter for newline, Esc to dismiss panels.
+ * Shortcuts are intentionally NOT shown here — Ctrl+F / Enter / Esc only
+ * work inside an open chat room, so displaying them here would be misleading.
+ * They are visible as tooltips on the relevant UI elements inside ChatArea.
  */
-import { MessageCircle, Menu, Sparkles, Users, Shield } from 'lucide-react'
+import { useState } from 'react'
+import { MessageCircle, Menu, Sparkles, Users, Shield, Plus, Zap } from 'lucide-react'
 import { useChatStore } from '../../store/chatStore'
+import CreateRoomModal from './CreateRoomModal'
 import './EmptyState.css'
 
 export default function EmptyState() {
   const { openSidebar } = useChatStore()
+  const [createTab, setCreateTab] = useState('dm')
+  const [showCreate, setShowCreate] = useState(false)
+
+  const openDM    = () => { setCreateTab('dm');    setShowCreate(true) }
+  const openGroup = () => { setCreateTab('group'); setShowCreate(true) }
 
   return (
     <div className="empty-wrap clay-lg">
-      {/* Mobile-only header: hamburger button to open the sidebar */}
+      {showCreate && (
+        <CreateRoomModal initialTab={createTab} onClose={() => setShowCreate(false)} />
+      )}
+
+      {/* Mobile-only header */}
       <div className="empty-mobile-header">
         <button className="icon-btn" onClick={openSidebar} title="Open sidebar">
           <Menu size={20}/>
@@ -46,27 +43,37 @@ export default function EmptyState() {
       </div>
 
       <div className="empty-body">
-        {/* Hero icon with decorative sparkles */}
+        {/* Hero icon */}
         <div className="empty-hero-icon">
           <MessageCircle size={56} strokeWidth={1.8}/>
           <span className="empty-hero-sparkle s1"><Sparkles size={18}/></span>
           <span className="empty-hero-sparkle s2"><Sparkles size={14}/></span>
         </div>
+
         <h1 className="empty-title">Welcome to ConnectHub</h1>
         <p className="empty-sub">
-          Select a chat from the sidebar to start messaging,<br/>
-          or start a new conversation to connect with someone.
+          Pick up where you left off, or start something new.
         </p>
 
-        {/* Feature highlights grid */}
+        {/* Primary CTAs */}
+        <div className="empty-actions">
+          <button className="empty-action-btn primary" onClick={openDM}>
+            <MessageCircle size={16}/> New direct message
+          </button>
+          <button className="empty-action-btn" onClick={openGroup}>
+            <Users size={15}/><Plus size={11} style={{ marginLeft: -2 }}/> New group
+          </button>
+        </div>
+
+        {/* Feature highlights */}
         <div className="empty-features">
           <div className="empty-feature">
             <div className="empty-feature-icon" style={{ background: 'var(--primary-soft)', color: 'var(--primary)' }}>
-              <MessageCircle size={20}/>
+              <Zap size={20}/>
             </div>
             <div>
-              <div className="empty-feature-title">Instant messaging</div>
-              <div className="empty-feature-sub">Real-time delivery & typing indicators</div>
+              <div className="empty-feature-title">Real-time messaging</div>
+              <div className="empty-feature-sub">Instant delivery with typing indicators</div>
             </div>
           </div>
           <div className="empty-feature">
@@ -74,8 +81,8 @@ export default function EmptyState() {
               <Users size={20}/>
             </div>
             <div>
-              <div className="empty-feature-title">Group rooms</div>
-              <div className="empty-feature-sub">Create channels with admin controls</div>
+              <div className="empty-feature-title">Groups</div>
+              <div className="empty-feature-sub">Create groups with admin controls</div>
             </div>
           </div>
           <div className="empty-feature">
@@ -83,18 +90,10 @@ export default function EmptyState() {
               <Shield size={20}/>
             </div>
             <div>
-              <div className="empty-feature-title">Secure & private</div>
+              <div className="empty-feature-title">Secure &amp; private</div>
               <div className="empty-feature-sub">Encrypted sessions with OAuth2</div>
             </div>
           </div>
-        </div>
-
-        {/* Keyboard shortcut reference for power users */}
-        <div className="empty-shortcuts">
-          <div><kbd>Ctrl</kbd>+<kbd>F</kbd> Search</div>
-          <div><kbd>Enter</kbd> Send message</div>
-          <div><kbd>Shift</kbd>+<kbd>Enter</kbd> New line</div>
-          <div><kbd>Esc</kbd> Dismiss</div>
         </div>
       </div>
     </div>

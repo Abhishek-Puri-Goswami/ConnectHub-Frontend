@@ -9,11 +9,27 @@ import {
   MOCK_USER,
 } from '../helpers/api-mocks.js'
 
+/**
+ * On mobile (≤900px) the sidebar is a hidden slide-out drawer.
+ * Wait for the hamburger button to appear, then click it.
+ * Uses waitFor so this is robust against page-load races.
+ */
+async function openSidebarIfMobile(page) {
+  const vp = page.viewportSize()
+  if (!vp || vp.width > 900) return
+  const btn = page.locator('button[title="Open sidebar"], .ca-menu-btn').first()
+  await btn.waitFor({ state: 'visible', timeout: 10000 })
+  await btn.click()
+  await page.locator('.sidebar-container.open').waitFor({ state: 'attached', timeout: 5000 })
+}
+
 test.describe('Sidebar', () => {
   test.beforeEach(async ({ page }) => {
     await seedAuth(page)
     await mockChatApis(page, { rooms: [MOCK_ROOM, MOCK_DM_ROOM] })
     await page.goto('/chat')
+    // On mobile the sidebar is a hidden drawer — open it so tests can interact with it
+    await openSidebarIfMobile(page)
   })
 
   // ── Structure ─────────────────────────────────────────────────────────────
@@ -25,7 +41,7 @@ test.describe('Sidebar', () => {
   })
 
   test('renders room list with seeded rooms', async ({ page }) => {
-    await expect(page.getByText('General')).toBeVisible()
+    await expect(page.getByText('General').first()).toBeVisible()
   })
 
   test('shows search input in sidebar', async ({ page }) => {
@@ -42,7 +58,7 @@ test.describe('Sidebar', () => {
   test('filters rooms by search query', async ({ page }) => {
     const searchInput = page.locator('.sb input[type="text"], input[placeholder*="Search"]').first()
     await searchInput.fill('General')
-    await expect(page.getByText('General')).toBeVisible()
+    await expect(page.getByText('General').first()).toBeVisible()
     // DM room name contains DM- prefix; should still be filtered
   })
 
@@ -58,7 +74,7 @@ test.describe('Sidebar', () => {
     await expect(page.getByText('General')).not.toBeVisible()
 
     await searchInput.clear()
-    await expect(page.getByText('General')).toBeVisible()
+    await expect(page.getByText('General').first()).toBeVisible()
   })
 
   // ── Room navigation ───────────────────────────────────────────────────────
@@ -68,12 +84,12 @@ test.describe('Sidebar', () => {
       route.fulfill({ json: { success: true, data: [] } })
     })
 
-    await page.getByText('General').click()
+    await page.getByText('General').first().click()
 
     // URL should reflect the active room
     await expect(page).toHaveURL(/\/chat/)
     // Chat area header should show the room name
-    await expect(page.locator('.chat-area-header, .chat-header').getByText('General')).toBeVisible()
+    await expect(page.locator('.ca-head').getByText('General')).toBeVisible()
   })
 
   // ── Create DM modal ───────────────────────────────────────────────────────
@@ -81,7 +97,7 @@ test.describe('Sidebar', () => {
   test('opens Create Room modal on Message button click', async ({ page }) => {
     await page.getByRole('button', { name: /^Message$/i }).click()
     await expect(page.getByRole('dialog')).toBeVisible()
-    await expect(page.getByText(/Direct message/i)).toBeVisible()
+    await expect(page.getByText(/Direct message/i).first()).toBeVisible()
   })
 
   test('closes Create Room modal via Escape key', async ({ page }) => {
@@ -102,7 +118,10 @@ test.describe('Sidebar', () => {
   })
 
   test('creates a DM room and navigates to it', async ({ page }) => {
-    await mockUserSearch(page, [MOCK_USER])
+    // CreateRoomModal filters out the logged-in user (MOCK_USER, userId='user-1') from search results.
+    // Use a different userId so the result appears in the dialog.
+    const OTHER_USER = { ...MOCK_USER, userId: 'user-other', id: 'user-other', username: 'other_jane' }
+    await mockUserSearch(page, [OTHER_USER])
     await mockCreateRoom(page, MOCK_DM_ROOM)
 
     await page.route('**/api/v1/messages*', (route) => {
@@ -113,9 +132,9 @@ test.describe('Sidebar', () => {
 
     const searchInput = page.getByRole('dialog').locator('input[placeholder*="Search"], input[type="text"]').first()
     await searchInput.fill('jane')
-    await expect(page.getByText('Jane Doe')).toBeVisible()
+    await expect(page.getByRole('dialog').getByText('Jane Doe')).toBeVisible()
 
-    await page.getByText('Jane Doe').click()
+    await page.getByRole('dialog').getByText('Jane Doe').click()
 
     const createBtn = page.getByRole('dialog').getByRole('button', { name: /Create|Start/i })
     await createBtn.click()
@@ -129,7 +148,7 @@ test.describe('Sidebar', () => {
     await page.getByRole('button', { name: /^Group$/i }).click()
     const dialog = page.getByRole('dialog')
     await expect(dialog).toBeVisible()
-    await expect(dialog.getByText(/Channel|Group/i)).toBeVisible()
+    await expect(dialog.getByText(/Channel|Group/i).first()).toBeVisible()
   })
 
   test('requires a room name for group creation', async ({ page }) => {

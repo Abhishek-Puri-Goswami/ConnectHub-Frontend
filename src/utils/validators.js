@@ -173,5 +173,5 @@ export const maskPhone = (p) => {
   if (!p) return ''
   const s = String(p).replace(/\D/g, '')
   if (s.length < 4) return s
-  return '••••••' + s.slice(-4)
+  return '******' + s.slice(-4)
 }

@@ -1,212 +1,411 @@
 /*
- * VerifyEmailPage.jsx — Email OTP Verification after Registration
+ * VerifyEmailPage.jsx — Combined Email + Phone OTP Verification after Registration
  *
  * Purpose:
- *   After a user registers (or when their email is found to be unverified during
- *   login), they are redirected here to confirm their email address by entering
- *   a 6-digit OTP that was sent to their inbox.
- *   On successful verification the backend returns JWT tokens, so the user is
- *   immediately logged in and redirected to /chat — no separate login step needed.
+ *   After a user registers they land here to confirm both their email address and
+ *   their phone number before being logged in. Two independent OTP sections are
+ *   shown side-by-side (or stacked on mobile):
  *
- * How it gets the email address:
- *   React Router's useLocation() reads the `state` object that was passed when
- *   navigate('/verify-email', { state: { email } }) was called from RegisterPage
- *   or LoginPage. If no email is in state (direct URL access), the user is
- *   redirected back to /login because we have nothing to verify.
+ *   Email section
+ *     The OTP was already sent by the backend during registration.
+ *     Auto-verify fires as soon as 6 digits are entered.
+ *     A 300-second expiry countdown and a 60-second resend cooldown are shown.
  *
- * Two countdown timers run in parallel:
- *   1. cooldown (60s) — prevents the user from requesting a new OTP too quickly.
- *      The Resend button is hidden while this counts down.
- *   2. expiresIn (300s = 5 min) — counts down to show the OTP expiry time.
- *      Displayed as a MM:SS formatted timer. After 0, the user must request a new code.
- *   Both timers use the same pattern: setInterval that decrements by 1 each second,
- *   with a cleanup in the useEffect return to stop the interval when the component
- *   unmounts or the value reaches 0.
+ *   Phone section
+ *     The OTP must be explicitly requested (SMS is not sent automatically on
+ *     registration). A "Send code" button triggers POST /auth/phone/request-otp.
+ *     After the code is sent, the 6-digit input appears with its own cooldown.
+ *     Auto-verify fires on the 6th digit.
  *
- * Auto-verify on 6th digit:
- *   A useEffect watches the `otp` state. As soon as it reaches 6 characters,
- *   verify() is called automatically so the user doesn't need to click a button.
+ * Token handling:
+ *   Email verification (POST /auth/verify-registration-otp) returns JWT tokens.
+ *   We hold those tokens in state without logging in immediately. Once BOTH email
+ *   and phone are verified we call setAuth() and navigate to /chat. If the user
+ *   provided no phone number during registration, only the email section is shown
+ *   and we navigate as soon as email is verified (backward-compatible with the
+ *   LoginPage redirect which only passes { email } in state).
  *
- * Resend OTP:
- *   resend() calls api.resendOtp(email) and restarts both timers with fresh values.
- *   The backend responds with a cooldownSeconds field, which is used instead of
- *   a hardcoded 60 to respect any server-side cooldown configuration.
+ * State received via React Router location.state:
+ *   email  — required; if absent, redirect to /login
+ *   phone  — optional (full international, e.g. "+919876543210"); omit to skip
+ *            the phone section entirely
+ *
+ * Cooldown timers:
+ *   Each section has an independent cooldown key (emailCooldownKey / phoneCooldownKey).
+ *   Incrementing the key restarts the corresponding useEffect-based interval from 0.
  */
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { useLocation, useNavigate } from 'react-router-dom'
 import { api } from '../../services/api'
 import { useAuthStore } from '../../store/authStore'
-import { ArrowLeft, Loader2, Check, X, Mail, ShieldCheck } from 'lucide-react'
+import {
+  ArrowLeft, Loader2, Check, X, Mail, Phone, ShieldCheck, Send,
+} from 'lucide-react'
 import AuthLayout from './AuthLayout'
 import OtpInput from './OtpInput'
-import { maskEmail } from '../../utils/validators'
+import { maskEmail, maskPhone } from '../../utils/validators'
 import './AuthStyles.css'
 
+/* ─── tiny helper: format seconds as M:SS ─────────────────────── */
+function fmt(s) {
+  return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`
+}
+
 export default function VerifyEmailPage() {
-  const location = useLocation()
-  const navigate = useNavigate()
-  const setAuth = useAuthStore(s => s.setAuth)
+  const location  = useLocation()
+  const navigate  = useNavigate()
+  const setAuth   = useAuthStore(s => s.setAuth)
 
-  /*
-   * email — read from React Router location state. This avoids putting the
-   * email in the URL (which would be visible and bookmarkable) while still
-   * sharing it from the previous page.
-   */
+  /* credentials passed from RegisterPage (or LoginPage for email-only redirects) */
   const email = location.state?.email || ''
+  const phone = location.state?.phone || ''      // full intl format, e.g. "+919876543210"
+  const hasPhone = Boolean(phone)
 
-  const [otp, setOtp] = useState('')
-  const [error, setError] = useState('')
-  const [loading, setLoading] = useState(false)
-
-  /*
-   * cooldown — seconds until the user can request a new OTP.
-   * Starts at 60 to prevent the first resend from being immediate.
-   */
-  const [cooldown, setCooldown] = useState(60)
-  const [cooldownKey, setCooldownKey] = useState(0)
-
-  /*
-   * expiresIn — countdown for OTP expiry (5 minutes = 300 seconds).
-   * Purely for UI feedback; the actual expiry is enforced by the backend.
-   */
-  const [expiresIn, setExpiresIn] = useState(300)
-
-  /* Guard: if no email was passed in state, we can't show this page meaningfully */
+  /* Guard: if no email in state, bounce to login */
   useEffect(() => { if (!email) navigate('/login', { replace: true }) }, [email])
 
-  /*
-   * Cooldown timer — single setInterval per lifecycle to avoid recreating on
-   * each tick (which breaks Playwright's page.clock.fastForward in tests).
-   * cooldownKey increments on resend to restart the interval fresh.
-   */
+  /* ── EMAIL section state ──────────────────────────────────────── */
+  const [emailOtp,      setEmailOtp]      = useState('')
+  const [emailLoading,  setEmailLoading]  = useState(false)
+  const [emailError,    setEmailError]    = useState('')
+  const [emailVerified, setEmailVerified] = useState(false)
+
+  const [emailCooldown,    setEmailCooldown]    = useState(
+    typeof window !== 'undefined' && window.__TEST_RESEND_COOLDOWN != null
+      ? window.__TEST_RESEND_COOLDOWN : 60
+  )
+  const [emailCooldownKey, setEmailCooldownKey] = useState(0)
+  const [emailExpiresIn,   setEmailExpiresIn]   = useState(300)
+
+  /* hold tokens returned by email verification so we can log in after phone too */
+  const pendingTokens = useRef(null)
+
+  /* ── PHONE section state ──────────────────────────────────────── */
+  const [phoneCodeSent,   setPhoneCodeSent]   = useState(false)
+  const [phoneOtp,        setPhoneOtp]        = useState('')
+  const [phoneLoading,    setPhoneLoading]    = useState(false)
+  const [phoneError,      setPhoneError]      = useState('')
+  const [phoneVerified,   setPhoneVerified]   = useState(false)
+  const [phoneSending,    setPhoneSending]    = useState(false)
+
+  const [phoneCooldown,    setPhoneCooldown]    = useState(0)
+  const [phoneCooldownKey, setPhoneCooldownKey] = useState(0)
+
+  /* ── Timers ───────────────────────────────────────────────────── */
+
+  /* email cooldown */
   useEffect(() => {
-    if (cooldown <= 0) return
+    if (emailCooldown <= 0) return
     const id = setInterval(() => {
-      setCooldown(c => {
-        if (c <= 1) { clearInterval(id); return 0 }
-        return c - 1
-      })
+      setEmailCooldown(c => { if (c <= 1) { clearInterval(id); return 0 } return c - 1 })
     }, 1000)
     return () => clearInterval(id)
-  }, [cooldownKey]) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [emailCooldownKey]) // eslint-disable-line react-hooks/exhaustive-deps
 
-  /* expiresIn countdown timer — single interval on mount */
+  /* email expiry */
   useEffect(() => {
+    if (emailVerified) return
     const id = setInterval(() => {
-      setExpiresIn(c => {
-        if (c <= 1) { clearInterval(id); return 0 }
-        return c - 1
-      })
+      setEmailExpiresIn(c => { if (c <= 1) { clearInterval(id); return 0 } return c - 1 })
     }, 1000)
     return () => clearInterval(id)
-  }, [])
+  }, [emailVerified])
+
+  /* phone cooldown */
+  useEffect(() => {
+    if (phoneCooldown <= 0) return
+    const id = setInterval(() => {
+      setPhoneCooldown(c => { if (c <= 1) { clearInterval(id); return 0 } return c - 1 })
+    }, 1000)
+    return () => clearInterval(id)
+  }, [phoneCooldownKey]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  /* ── Actions ──────────────────────────────────────────────────── */
 
   /*
-   * verify — submits the 6-digit OTP to the backend's email verification endpoint.
-   * On success, the backend returns { accessToken, refreshToken, user } just like
-   * a regular login — so we call setAuth() and navigate to /chat immediately.
-   * On failure, the OTP is cleared so the user can re-enter cleanly.
+   * finishLogin — called once all required verifications are complete.
+   * Uses the tokens captured from email verification to log the user in.
    */
-  const verify = async () => {
-    if (otp.length !== 6 || loading) return
-    setError(''); setLoading(true)
-    try {
-      const data = await api.verifyOtp({ email, otp })
-      setAuth(data.accessToken, data.refreshToken, data.user)
-      navigate('/chat', { replace: true })
-    } catch (err) {
-      setError(err.message || 'Invalid code')
-      setOtp('')
-    } finally { setLoading(false) }
+  const finishLogin = (tokens) => {
+    setAuth(tokens.accessToken, tokens.refreshToken, tokens.user)
+    navigate('/chat', { replace: true })
   }
 
-  /*
-   * Auto-verify effect — fires whenever the OTP value changes.
-   * When the user types the 6th digit, `otp.length === 6` becomes true and
-   * verify() is called automatically so there's no need to click a button.
-   */
-  useEffect(() => { if (otp.length === 6 && !loading) verify() /* eslint-disable-next-line */ }, [otp])
+  /* verifyEmail — submits email OTP; stores tokens for later use */
+  const verifyEmail = async () => {
+    if (emailOtp.length !== 6 || emailLoading || emailVerified) return
+    setEmailError(''); setEmailLoading(true)
+    try {
+      const data = await api.verifyOtp({ email, otp: emailOtp })
+      pendingTokens.current = data
+      setEmailVerified(true)
+      /* if phone was not required, log in immediately */
+      if (!hasPhone || phoneVerified) finishLogin(data)
+    } catch (err) {
+      setEmailError(err.message || 'Invalid code')
+      setEmailOtp('')
+    } finally { setEmailLoading(false) }
+  }
 
-  /*
-   * resend — requests a fresh OTP from the backend.
-   * The backend's response may include a cooldownSeconds field that overrides
-   * our default 60s cooldown, so we use it if available.
-   * expiresIn is reset to the full 5 minutes because a new OTP was just issued.
-   */
-  const resend = async () => {
-    if (cooldown > 0) return
-    setError('')
+  /* auto-verify email on 6th digit */
+  useEffect(() => { if (emailOtp.length === 6) verifyEmail() }, [emailOtp]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  /* resendEmail — requests a new email OTP */
+  const resendEmail = async () => {
+    if (emailCooldown > 0) return
+    setEmailError('')
     try {
       const res = await api.resendOtp(email)
-      setCooldown(res?.cooldownSeconds || 60)
-      setCooldownKey(k => k + 1)
-      setExpiresIn(300)
-    } catch (err) { setError(err.message || 'Could not resend') }
+      setEmailCooldown(res?.cooldownSeconds || 60)
+      setEmailCooldownKey(k => k + 1)
+      setEmailExpiresIn(300)
+    } catch (err) { setEmailError(err.message || 'Could not resend') }
   }
+
+  /* sendPhoneCode — requests the SMS OTP for the first time (or on resend) */
+  const sendPhoneCode = async () => {
+    if (phoneCooldown > 0 || phoneSending) return
+    setPhoneError(''); setPhoneSending(true)
+    try {
+      const res = await api.requestPhoneOtp(phone)
+      setPhoneCodeSent(true)
+      setPhoneCooldown(res?.cooldownSeconds || 60)
+      setPhoneCooldownKey(k => k + 1)
+    } catch (err) { setPhoneError(err.message || 'Could not send SMS') }
+    finally { setPhoneSending(false) }
+  }
+
+  /* verifyPhone — submits phone OTP */
+  const verifyPhone = async () => {
+    if (phoneOtp.length !== 6 || phoneLoading || phoneVerified) return
+    setPhoneError(''); setPhoneLoading(true)
+    try {
+      await api.verifyPhoneOtp(phone, phoneOtp)
+      setPhoneVerified(true)
+      /* if email was already verified, log in now */
+      if (emailVerified && pendingTokens.current) finishLogin(pendingTokens.current)
+    } catch (err) {
+      setPhoneError(err.message || 'Invalid code')
+      setPhoneOtp('')
+    } finally { setPhoneLoading(false) }
+  }
+
+  /* auto-verify phone on 6th digit */
+  useEffect(() => { if (phoneOtp.length === 6) verifyPhone() }, [phoneOtp]) // eslint-disable-line react-hooks/exhaustive-deps
 
   if (!email) return null
 
+  /* ── Render ───────────────────────────────────────────────────── */
   return (
     <AuthLayout tagline="Just one more step">
-      {/* Back button returns to login without losing state */}
       <button className="auth-back-btn" onClick={() => navigate('/login')}>
         <ArrowLeft size={14}/> Back to sign in
       </button>
 
-      {/* Hero icon and heading */}
-      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', textAlign: 'center', marginBottom: 20 }}>
+      {/* Page heading */}
+      <div style={{ textAlign: 'center', marginBottom: 24 }}>
         <div style={{
           width: 64, height: 64, borderRadius: 'var(--r-xl)',
           background: 'var(--primary-soft)', color: 'var(--primary)',
           display: 'flex', alignItems: 'center', justifyContent: 'center',
-          boxShadow: 'var(--clay-shadow)',
-          marginBottom: 12,
+          boxShadow: 'var(--clay-shadow)', margin: '0 auto 12px',
         }}>
-          <Mail size={28}/>
+          <ShieldCheck size={28}/>
         </div>
-        <h2 className="auth-title">Verify your email</h2>
-        {/* maskEmail shows a privacy-safe version like "jo***@gmail.com" */}
+        <h2 className="auth-title">Verify your account</h2>
         <p className="auth-subtitle" style={{ marginBottom: 0 }}>
-          We sent a 6-digit code to<br/>
-          <strong style={{ color: 'var(--text)' }}>{maskEmail(email)}</strong>
+          {hasPhone
+            ? 'Confirm your email and phone to get started'
+            : 'Confirm your email address to get started'}
         </p>
       </div>
 
-      {/* 6-box OTP input — auto-focuses the first box, moves focus forward on each digit */}
-      <OtpInput value={otp} onChange={setOtp} />
-
-      {/* Live countdown showing how long until the OTP expires (MM:SS format) */}
-      {expiresIn > 0 && (
-        <div className="otp-timer">
-          Expires in <strong>{Math.floor(expiresIn / 60)}:{String(expiresIn % 60).padStart(2,'0')}</strong>
-        </div>
-      )}
-
-      {error && (
-        <p className="error-text" style={{ justifyContent: 'center', marginTop: 10 }}>
-          <X size={14}/> {error}
-        </p>
-      )}
-
-      {/* Manual verify button as a fallback (auto-verify fires on 6th digit) */}
-      <button
-        className="btn btn-primary btn-block"
-        onClick={verify}
-        disabled={otp.length !== 6}
-        style={{ marginTop: 16 }}
+      {/* ── EMAIL SECTION ────────────────────────────────────────── */}
+      <VerifySection
+        icon={<Mail size={18}/>}
+        label="Email verification"
+        verified={emailVerified}
+        hint={<>Code sent to <strong style={{ color: 'var(--text)' }}>{maskEmail(email)}</strong></>}
       >
-        {loading ? <Loader2 size={18} className="spin"/> : <ShieldCheck size={18}/>}
-        {loading ? 'Verifying…' : 'Verify email'}
-      </button>
+        {!emailVerified ? (
+          <>
+            <OtpInput value={emailOtp} onChange={setEmailOtp} disabled={emailLoading} />
 
-      {/* Resend section — shows countdown while cooling down, then a Resend link */}
-      <div className="otp-timer" style={{ marginTop: 16 }}>
-        {cooldown > 0 ? (
-          <>Didn't get it? Resend in <strong>{cooldown}s</strong></>
+            {emailExpiresIn > 0 && (
+              <div className="otp-timer">
+                Expires in <strong>{fmt(emailExpiresIn)}</strong>
+              </div>
+            )}
+
+            {emailError && (
+              <p className="error-text" style={{ justifyContent: 'center', marginTop: 8 }}>
+                <X size={14}/> {emailError}
+              </p>
+            )}
+
+            <button
+              className="btn btn-primary btn-block"
+              onClick={verifyEmail}
+              disabled={emailOtp.length !== 6 || emailLoading}
+              style={{ marginTop: 12 }}
+            >
+              {emailLoading ? <Loader2 size={16} className="spin"/> : <Check size={16}/>}
+              {emailLoading ? 'Verifying…' : 'Verify email'}
+            </button>
+
+            <div className="otp-timer" style={{ marginTop: 10 }}>
+              {emailCooldown > 0
+                ? <>Resend in <strong>{emailCooldown}s</strong></>
+                : <button className="auth-link" onClick={resendEmail}>Resend code</button>
+              }
+            </div>
+          </>
         ) : (
-          <button className="auth-link" onClick={resend}>Resend code</button>
+          <VerifiedBadge label="Email verified" />
+        )}
+      </VerifySection>
+
+      {/* ── PHONE SECTION (only when phone was provided) ─────────── */}
+      {hasPhone && (
+        <>
+          <div style={{ margin: '20px 0', borderTop: '1px solid var(--border)', opacity: 0.5 }}/>
+
+          <VerifySection
+            icon={<Phone size={18}/>}
+            label="Phone verification"
+            verified={phoneVerified}
+            hint={<>Code sent to <strong style={{ color: 'var(--text)' }}>+91 {maskPhone(phone)}</strong></>}
+          >
+            {!phoneVerified ? (
+              <>
+                {!phoneCodeSent ? (
+                  /* Initial state: show Send Code button */
+                  <>
+                    {phoneError && (
+                      <p className="error-text" style={{ justifyContent: 'center', marginBottom: 10 }}>
+                        <X size={14}/> {phoneError}
+                      </p>
+                    )}
+                    <button
+                      className="btn btn-primary btn-block"
+                      onClick={sendPhoneCode}
+                      disabled={phoneSending}
+                    >
+                      {phoneSending ? <Loader2 size={16} className="spin"/> : <Send size={16}/>}
+                      {phoneSending ? 'Sending…' : 'Send code'}
+                    </button>
+                  </>
+                ) : (
+                  /* Code sent: show OTP input */
+                  <>
+                    <OtpInput value={phoneOtp} onChange={setPhoneOtp} disabled={phoneLoading} autoFocus={false} />
+
+                    {phoneError && (
+                      <p className="error-text" style={{ justifyContent: 'center', marginTop: 8 }}>
+                        <X size={14}/> {phoneError}
+                      </p>
+                    )}
+
+                    <button
+                      className="btn btn-primary btn-block"
+                      onClick={verifyPhone}
+                      disabled={phoneOtp.length !== 6 || phoneLoading}
+                      style={{ marginTop: 12 }}
+                    >
+                      {phoneLoading ? <Loader2 size={16} className="spin"/> : <Check size={16}/>}
+                      {phoneLoading ? 'Verifying…' : 'Verify phone'}
+                    </button>
+
+                    <div className="otp-timer" style={{ marginTop: 10 }}>
+                      {phoneCooldown > 0
+                        ? <>Resend in <strong>{phoneCooldown}s</strong></>
+                        : <button className="auth-link" onClick={sendPhoneCode}>Resend code</button>
+                      }
+                    </div>
+                  </>
+                )}
+              </>
+            ) : (
+              <VerifiedBadge label="Phone verified" />
+            )}
+          </VerifySection>
+
+          {/* Progress indicator: shows what's still pending */}
+          {(!emailVerified || !phoneVerified) && (
+            <div style={{
+              marginTop: 20, padding: '10px 14px',
+              background: 'var(--primary-soft)', borderRadius: 'var(--r-md)',
+              fontSize: 13, color: 'var(--primary)',
+              display: 'flex', alignItems: 'center', gap: 8,
+            }}>
+              <Loader2 size={14} className={emailVerified && phoneVerified ? '' : 'spin'}/>
+              {!emailVerified && !phoneVerified
+                ? 'Verify both email and phone to continue'
+                : !emailVerified
+                  ? 'Almost there — verify your email to finish'
+                  : 'Almost there — verify your phone to finish'}
+            </div>
+          )}
+        </>
+      )}
+    </AuthLayout>
+  )
+}
+
+/* ─── VerifySection ─────────────────────────────────────────────────
+ * Wrapper that adds an icon + label header and a "verified" hint line.
+ * When verified=true, the children are replaced by a green badge.
+ */
+function VerifySection({ icon, label, verified, hint, children }) {
+  return (
+    <div style={{
+      border: `1px solid ${verified ? 'var(--success, #22c55e)' : 'var(--border)'}`,
+      borderRadius: 'var(--r-lg)',
+      padding: '16px 18px',
+      transition: 'border-color 0.25s',
+      background: verified ? 'color-mix(in srgb, var(--success, #22c55e) 6%, var(--surface))' : 'var(--surface)',
+    }}>
+      {/* header row */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10 }}>
+        <span style={{
+          color: verified ? 'var(--success, #22c55e)' : 'var(--primary)',
+          display: 'flex', alignItems: 'center',
+        }}>
+          {verified ? <Check size={18}/> : icon}
+        </span>
+        <span style={{ fontWeight: 600, fontSize: 14, color: 'var(--text)' }}>{label}</span>
+        {verified && (
+          <span style={{
+            marginLeft: 'auto', fontSize: 11, fontWeight: 600,
+            color: 'var(--success, #22c55e)',
+            background: 'color-mix(in srgb, var(--success, #22c55e) 15%, transparent)',
+            padding: '2px 8px', borderRadius: 999,
+          }}>✓ Done</span>
         )}
       </div>
-    </AuthLayout>
+
+      {/* destination hint (only while unverified) */}
+      {!verified && (
+        <p style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 12, letterSpacing: '0.5px' }}>{hint}</p>
+      )}
+
+      {children}
+    </div>
+  )
+}
+
+/* ─── VerifiedBadge ─────────────────────────────────────────────────
+ * Shown inside a section after it's been verified successfully.
+ */
+function VerifiedBadge({ label }) {
+  return (
+    <div style={{
+      display: 'flex', alignItems: 'center', gap: 8,
+      color: 'var(--success, #22c55e)', fontSize: 14, fontWeight: 500,
+      padding: '4px 0',
+    }}>
+      <Check size={18} strokeWidth={2.5}/>
+      {label} — confirmed!
+    </div>
   )
 }

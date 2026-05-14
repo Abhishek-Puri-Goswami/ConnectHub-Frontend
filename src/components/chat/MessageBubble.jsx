@@ -45,14 +45,16 @@
  *   onDelete    — called when "Delete" is clicked
  *   highlight   — true if this message is highlighted (e.g., from search)
  */
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect, useRef, memo, useCallback, useMemo } from 'react'
 import { format } from 'date-fns'
 import { api } from '../../services/api'
 import { useAuthStore } from '../../store/authStore'
 import { useChatStore } from '../../store/chatStore'
 import {
   Reply, Edit3, Trash2, Smile, Check, CheckCheck,
-  MoreHorizontal, Pin, X, Info
+  MoreHorizontal, Pin, X, Info, Download,
+  FileText, FileImage, FileArchive, FileSpreadsheet,
+  FileCode, FileAudio, FileVideo, File
 } from 'lucide-react'
 import EmojiReactions from './EmojiReactions'
 import './MessageBubble.css'
@@ -65,28 +67,87 @@ import './MessageBubble.css'
  */
 export const decodeHtml = (text) => {
   if (!text) return ''
-  const doc = new DOMParser().parseFromString(text, 'text/html')
-  return doc.documentElement.textContent || ''
+  
+  // First, handle common double-escaped entities
+  let decoded = text
+    .replace(/&amp;/g, '&')
+    .replace(/&lt;/g, '<')
+    .replace(/&gt;/g, '>')
+    .replace(/&quot;/g, '"')
+    .replace(/&#39;/g, "'")
+    .replace(/&#x27;/g, "'")
+    
+  // Then use DOMParser to handle any remaining valid HTML entities
+  try {
+    const doc = new DOMParser().parseFromString(decoded, 'text/html')
+    return doc.documentElement.textContent || decoded
+  } catch (e) {
+    return decoded
+  }
 }
 
-const PALETTE = ['#FF8E72','#7AC9A7','#B8A4F4','#FFB547','#F47174','#6BCEEA','#FF9F87','#9D8FF5']
+import Avatar from '../common/Avatar'
 
 /*
- * Avatar — a small colored circle showing the sender's initial letter.
- * For own messages: uses a CSS gradient matching the primary theme color.
- * For others: picks a color from PALETTE based on the first character of their name,
- * so the same person always has the same color regardless of where they appear in the app.
+ * isEmojiOnly — returns true if `text` consists entirely of emoji characters,
+ * variation selectors, ZWJ sequences, and optional whitespace.
+ *
+ * When true, the bubble renders without a background or border ("sticker" style)
+ * and the emoji text is displayed at a larger font size so it reads naturally.
+ *
+ * emojiScale — returns a size class ('xl', 'lg', 'md') based on grapheme count:
+ *   1 emoji → xl (44px)  |  2-3 → lg (34px)  |  4+ → md (26px)
  */
-function Avatar({ name, isOwn }) {
-  const bg = isOwn
-    ? 'linear-gradient(135deg, var(--primary) 0%, var(--primary-hover) 100%)'
-    : PALETTE[(String(name).charCodeAt(0) || 0) % PALETTE.length]
-  const initial = typeof name === 'string' && name ? name.charAt(0).toUpperCase() : '?'
-  return (
-    <div className="mb-av" style={{ background: bg }}>
-      {initial}
-    </div>
-  )
+const isEmojiOnly = (text) => {
+  if (!text?.trim()) return false
+  const t = text.trim()
+  if (!/\p{Emoji_Presentation}/u.test(t)) return false
+  // Fail if there's any character that isn't an emoji, modifier, ZWJ, variation selector, or space
+  return !/[^\p{Emoji_Presentation}️‍\u{1F3FB}-\u{1F3FF}\s]/u.test(t)
+}
+
+const emojiScale = (text) => {
+  try {
+    // Intl.Segmenter gives accurate grapheme cluster counts for multi-codepoint emoji
+    if (typeof Intl?.Segmenter === 'function') {
+      const seg = new Intl.Segmenter(undefined, { granularity: 'grapheme' })
+      const count = [...seg.segment(text)].filter(s => /\p{Emoji_Presentation}/u.test(s.segment)).length
+      if (count <= 1) return 'xl'
+      if (count <= 3) return 'lg'
+      return 'md'
+    }
+  } catch { /* fallthrough */ }
+  const count = (text.match(/\p{Emoji_Presentation}/gu) || []).length
+  if (count <= 1) return 'xl'
+  if (count <= 3) return 'lg'
+  return 'md'
+}
+
+/*
+ * getFileIcon — returns the appropriate Lucide icon component for a filename
+ * based on its extension. Used in the FILE bubble instead of the 📎 emoji so
+ * the icon renders consistently across all platforms with proper sizing/color.
+ */
+function getFileIcon(filename, size = 16) {
+  const ext = (filename || '').split('.').pop().toLowerCase()
+  const props = { size, strokeWidth: 2 }
+  if (['jpg','jpeg','png','gif','webp','svg','bmp','ico','tiff'].includes(ext))
+    return <FileImage {...props} />
+  if (['mp4','mov','avi','mkv','webm','flv','wmv'].includes(ext))
+    return <FileVideo {...props} />
+  if (['mp3','wav','ogg','aac','flac','m4a'].includes(ext))
+    return <FileAudio {...props} />
+  if (['zip','rar','7z','tar','gz','bz2'].includes(ext))
+    return <FileArchive {...props} />
+  if (['xlsx','xls','csv','ods'].includes(ext))
+    return <FileSpreadsheet {...props} />
+  if (['js','ts','jsx','tsx','py','java','c','cpp','cs','go','rb','php','html','css','json','xml','sh','yml','yaml'].includes(ext))
+    return <FileCode {...props} />
+  if (['txt','md','rtf','log'].includes(ext))
+    return <FileText {...props} />
+  if (['pdf','doc','docx','odt','ppt','pptx'].includes(ext))
+    return <FileText {...props} />
+  return <File {...props} />
 }
 
 /*
@@ -113,9 +174,9 @@ function StatusTicks({ message, isOwn, roomMembers, userId }) {
   return <span className="mb-ticks sent" title="Sent"><Check size={14}/></span>
 }
 
-export default function MessageBubble({
-  message, roomId, isOwn, showAvatar,
-  onReply, onEdit, onDelete, onDeleteForMe, onInfo, highlight
+const MessageBubble = memo(function MessageBubble({
+  message, roomId, isOwn, isRoomAdmin, showAvatar,
+  onReply, onEdit, onDelete, onDeleteForMe, onInfo, onPin, highlight
 }) {
   const [hov, setHov] = useState(false)
   const [editing, setEditing] = useState(false)
@@ -144,8 +205,10 @@ export default function MessageBubble({
    * WebSocket events will update reactions in real-time via applyReactionEvent()
    * in chatStore, but we need the initial set from the database when first rendering.
    */
+  // Only fetch reactions from API if not already cached in store
   useEffect(() => {
     if (!message.messageId) return
+    if (messageReactions[message.messageId] !== undefined) return
     api.getReactions(message.messageId)
       .then(data => setReactions(message.messageId, data))
       .catch(() => {})
@@ -200,7 +263,7 @@ export default function MessageBubble({
     >
       {/* Avatar column — only shows avatar on the first message of a cluster */}
       <div className="mb-av-col">
-        {showAvatar ? <Avatar name={senderName} isOwn={isOwn} /> : <div className="mb-av-spacer"/>}
+        {showAvatar ? <Avatar src={senderMember?.avatarUrl} name={senderName} isOwn={isOwn} className="mb-av" /> : <div className="mb-av-spacer"/>}
       </div>
 
       <div className="mb-col">
@@ -253,32 +316,59 @@ export default function MessageBubble({
               </div>
             </div>
           ) : (
-            /* Normal bubble: renders text, image, or file depending on message type */
-            <div className={`mb-bubble ${isOwn ? 'own' : 'other'} ${highlight ? 'hi' : ''}`}>
-              {message.type === 'IMAGE' && message.mediaUrl && (
-                <img
-                  src={message.thumbnailUrl || message.mediaUrl}
-                  alt="attachment"
-                  className="mb-img"
-                />
-              )}
-              {message.type === 'FILE' && message.mediaUrl && (
-                <a
-                  href={message.mediaUrl}
-                  target="_blank"
-                  rel="noreferrer"
-                  className="mb-file"
-                >
-                  📎 {decodeHtml(message.content)}
-                </a>
-              )}
-              {(message.type === 'TEXT' || !message.type) && (
-                <div className="mb-text">{decodeHtml(message.content)}</div>
-              )}
-              {message.isPinned && (
-                <span className="mb-pin-tag"><Pin size={10}/> pinned</span>
-              )}
-            </div>
+            /* Normal bubble: renders text, image, or file depending on message type.
+               For emoji-only text messages the bubble is rendered transparent ("sticker"). */
+            (() => {
+              const decoded = decodeHtml(message.content)
+              const isTextMsg = message.type === 'TEXT' || !message.type
+              const emojiOnly = isTextMsg && isEmojiOnly(decoded)
+              const emojiSize = emojiOnly ? emojiScale(decoded) : ''
+              return (
+                <div className={`mb-bubble ${isOwn ? 'own' : 'other'} ${highlight ? 'hi' : ''} ${emojiOnly ? 'emoji-only' : ''}`}>
+                  {message.type === 'IMAGE' && message.mediaUrl && (
+                    <div className="mb-img-wrap">
+                      <img
+                        src={message.thumbnailUrl || message.mediaUrl}
+                        alt="attachment"
+                        className="mb-img"
+                      />
+                      <a
+                        href={message.mediaUrl}
+                        download={decoded || true}
+                        className="mb-dl-btn"
+                        title="Download"
+                        onClick={e => e.stopPropagation()}
+                      >
+                        <Download size={15}/>
+                      </a>
+                    </div>
+                  )}
+                  {message.type === 'FILE' && message.mediaUrl && (
+                    <div className="mb-file-wrap">
+                      <span className="mb-file-icon">{getFileIcon(decoded)}</span>
+                      <span className="mb-file-name">{decoded}</span>
+                      <a
+                        href={message.mediaUrl}
+                        download={decoded || true}
+                        className="mb-dl-btn mb-dl-btn--file"
+                        title="Download"
+                        onClick={e => e.stopPropagation()}
+                      >
+                        <Download size={15}/>
+                      </a>
+                    </div>
+                  )}
+                  {isTextMsg && (
+                    <div className={`mb-text ${emojiOnly ? `emoji-only emoji-${emojiSize}` : ''}`}>
+                      {decoded}
+                    </div>
+                  )}
+                  {message.isPinned && (
+                    <span className="mb-pin-tag"><Pin size={10}/> pinned</span>
+                  )}
+                </div>
+              )
+            })()
           )}
 
           {/* Hover options — hidden for deleted messages */}
@@ -296,12 +386,15 @@ export default function MessageBubble({
                 /* Delete scope confirmation */
                 <div className={`mb-dropdown mb-delete-confirm scale-in ${isOwn ? 'own' : 'other'}`}>
                   <div className="mb-delete-confirm-title">Delete message?</div>
-                  <button onClick={() => {
-                    onDeleteForMe()
-                    setShowDeleteConfirm(false)
-                  }}>
-                    Delete for me
-                  </button>
+                  {/* "Delete for me" only applies to messages you own — admins deleting others' messages can only delete for everyone */}
+                  {isOwn && (
+                    <button onClick={() => {
+                      onDeleteForMe()
+                      setShowDeleteConfirm(false)
+                    }}>
+                      Delete for me
+                    </button>
+                  )}
                   <button className="danger" onClick={() => {
                     onDelete()
                     setShowDeleteConfirm(false)
@@ -334,7 +427,12 @@ export default function MessageBubble({
                       <Info size={14}/> Info
                     </button>
                   )}
-                  {isOwn && (
+                  {isRoomAdmin && onPin && (
+                    <button onClick={() => { onPin(); setShowMenu(false) }}>
+                      <Pin size={14}/> {message.isPinned ? 'Unpin' : 'Pin'}
+                    </button>
+                  )}
+                  {(isOwn || isRoomAdmin) && (
                     <button
                       className="danger"
                       onClick={() => { setShowDeleteConfirm(true); setShowMenu(false) }}
@@ -373,4 +471,6 @@ export default function MessageBubble({
       </div>
     </div>
   )
-}
+})
+
+export default MessageBubble

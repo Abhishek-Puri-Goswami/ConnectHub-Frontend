@@ -8,7 +8,7 @@
  *
  * How the app handles rate limiting:
  *   The backend's RateLimitFilter (in the API Gateway) enforces per-user, per-action
- *   limits (e.g., 60 messages per minute for FREE users, 200 for PRO). When a limit
+ *   limits (e.g., 60 messages per minute for FREE users, 200 for PREMIUM). When a limit
  *   is exceeded, the backend returns HTTP 429 with an "X-RateLimit-Action" header
  *   that identifies which bucket was exhausted (e.g., "messages", "uploads", "otp").
  *

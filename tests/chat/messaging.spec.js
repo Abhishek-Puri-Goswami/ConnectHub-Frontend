@@ -14,9 +14,26 @@ const OLDER_MESSAGE = {
   createdAt: new Date(Date.now() - 86_400_000 * 2).toISOString(), // 2 days ago
 }
 
+/**
+ * On mobile (≤900px) the sidebar is a hidden slide-out drawer.
+ * Wait for the hamburger button to appear (EmptyState renders it), then click it.
+ * Uses waitFor so this is robust against page-load races.
+ */
+async function openSidebarIfMobile(page) {
+  const vp = page.viewportSize()
+  if (!vp || vp.width > 900) return
+  // EmptyState shows button[title="Open sidebar"]; ChatArea shows .ca-menu-btn
+  const btn = page.locator('button[title="Open sidebar"], .ca-menu-btn').first()
+  await btn.waitFor({ state: 'visible', timeout: 10000 })
+  await btn.click()
+  // Wait until the sidebar has the 'open' class (React state update applied)
+  await page.locator('.sidebar-container.open').waitFor({ state: 'attached', timeout: 5000 })
+}
+
 /** Navigate directly into a specific room's chat. */
 async function gotoRoom(page, roomId = MOCK_ROOM.id) {
   await page.goto(`/chat`)
+  await openSidebarIfMobile(page)
   // Click the room in the sidebar
   await page.getByText(MOCK_ROOM.name).first().click()
 }
@@ -35,6 +52,7 @@ test.describe('Chat Messaging', () => {
     })
 
     await page.goto('/chat')
+    await openSidebarIfMobile(page)
     await page.getByText(MOCK_ROOM.name).first().click()
   })
 
@@ -42,7 +60,7 @@ test.describe('Chat Messaging', () => {
 
   test('renders the chat header with room name', async ({ page }) => {
     await expect(
-      page.locator('.chat-header, .chat-area-header').getByText('General')
+      page.locator('.ca-head').getByText('General')
     ).toBeVisible()
   })
 
@@ -98,18 +116,18 @@ test.describe('Chat Messaging', () => {
 
   test('send button is visible', async ({ page }) => {
     // The send button (➤) should be in the message input toolbar
-    const sendBtn = page.locator('.send-btn, button[aria-label*="Send" i], .msg-send-btn')
+    const sendBtn = page.locator('.mi-send')
     await expect(sendBtn).toBeVisible()
   })
 
   test('emoji picker button is visible', async ({ page }) => {
-    const emojiBtn = page.locator('button[aria-label*="emoji" i], .emoji-btn, button:has(.emoji-trigger)')
-    await expect(emojiBtn.first()).toBeVisible()
+    const emojiBtn = page.locator('.mi-action.emoji')
+    await expect(emojiBtn).toBeVisible()
   })
 
   test('file upload button is visible', async ({ page }) => {
-    const uploadBtn = page.locator('button[aria-label*="attach" i], .attach-btn, label[for*="file"]')
-    await expect(uploadBtn.first()).toBeVisible()
+    const uploadBtn = page.locator('.mi-action:not(.emoji)')
+    await expect(uploadBtn).toBeVisible()
   })
 
   // ── Message display features ──────────────────────────────────────────────
@@ -123,6 +141,7 @@ test.describe('Chat Messaging', () => {
     })
 
     await page.reload()
+    await openSidebarIfMobile(page)
     await page.getByText(MOCK_ROOM.name).first().click()
 
     // Should show "Today" separator for today's messages
@@ -132,21 +151,22 @@ test.describe('Chat Messaging', () => {
   test('shows scroll-to-bottom button when scrolled up', async ({ page }) => {
     // Simulate scrolling up by calling scrollTop = 0 on the message container
     await page.evaluate(() => {
-      const container = document.querySelector('.messages-container, .chat-messages, .msg-list')
+      const container = document.querySelector('.ca-scroll')
       if (container) container.scrollTop = 0
     })
 
     // The scroll-to-bottom button appears after scrolling away from the bottom
     // It may not appear if there's nothing to scroll, which is fine for an empty list
-    const scrollBtn = page.locator('.scroll-bottom-btn, button[aria-label*="scroll" i]')
+    const scrollBtn = page.locator('.ca-scroll-btn')
     // We don't assert it's visible since the list might be short, just verify it can exist
-    await expect(page.locator('.chat-area, .chat-messages, .messages-container')).toBeVisible()
+    await expect(page.locator('.ca-body')).toBeVisible()
   })
 
   // ── Message actions ───────────────────────────────────────────────────────
 
   test('hovering a message reveals action menu', async ({ page }) => {
-    const messageBubble = page.locator('.message-bubble, .msg-bubble, [class*="message"]').first()
+    // .mb-row is the outer row; .mb-bubble is the chat bubble itself
+    const messageBubble = page.locator('.mb-row, .mb-bubble').first()
     await messageBubble.hover()
 
     // The actions menu (edit, delete, etc.) should appear on hover
@@ -198,7 +218,7 @@ test.describe('Chat Messaging', () => {
     // They render as small emoji icons — the container div should exist in the DOM
     const reactionArea = page.locator('.reactions, .emoji-reactions, [class*="reaction"]')
     // Just verify the chat area loaded (reactions only show when they exist)
-    await expect(page.locator('.chat-area, .chat-messages')).toBeVisible()
+    await expect(page.locator('.ca-body')).toBeVisible()
   })
 
   // ── Empty state ───────────────────────────────────────────────────────────
@@ -216,7 +236,7 @@ test.describe('Chat Messaging', () => {
   test('typing indicator container exists in the chat area', async ({ page }) => {
     // The typing indicator renders in the chat area footer area
     // It's hidden when nobody is typing — we just verify the layout is correct
-    await expect(page.locator('.chat-area, .chat-messages')).toBeVisible()
+    await expect(page.locator('.ca-body')).toBeVisible()
     await expect(page.locator('textarea, .message-input').first()).toBeVisible()
   })
 

@@ -22,6 +22,7 @@
  * Props:
  *   users (string[]) — array of display names of users currently typing
  */
+import Avatar from '../common/Avatar'
 import './TypingIndicator.css'
 
 export default function TypingIndicator({ users }) {
@@ -29,17 +30,14 @@ export default function TypingIndicator({ users }) {
    * Build the descriptive text based on how many people are typing.
    * Only the first user's name is shown; others are collapsed into "N others".
    */
-  const text = users.length === 1 ? `${users[0]} is typing`
-    : users.length === 2 ? `${users[0]} and ${users[1]} are typing`
-    : `${users[0]} and ${users.length - 1} others are typing`
-
-  /* Show the first two characters of the first typer's name as the avatar initial */
-  const initials = (users[0] || '?').slice(0, 2).toUpperCase()
+  const text = users.length === 1 ? `${users[0].name} is typing`
+    : users.length === 2 ? `${users[0].name} and ${users[1].name} are typing`
+    : `${users[0].name} and ${users.length - 1} others are typing`
 
   return (
     <div className="typing-wrap">
-      {/* Avatar circle with the typer's initials */}
-      <div className="typing-av">{initials}</div>
+      {/* Avatar component for the first typer */}
+      <Avatar src={users[0].avatarUrl} name={users[0].name} className="typing-av" />
 
       {/* Three dots with staggered animation delays create the bouncing effect */}
       <div className="typing-bubble">

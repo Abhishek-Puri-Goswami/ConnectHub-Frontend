@@ -6,10 +6,13 @@
  *   group channel. Rendered via React Portal directly into document.body so it
  *   is not affected by any parent component's CSS overflow or z-index.
  *
- * Two tabs:
+ * Three tabs:
  *   Channel (group) — enter a channel name, optional description, privacy toggle,
  *                     and search for multiple members to add.
  *   Direct message  — search for and select exactly one other user.
+ *   Discover        — search ALL public rooms on the platform (GET /rooms/search?q=)
+ *                     and join them with one click. Rooms the user already belongs to
+ *                     are hidden from results.
  *
  * How member search works:
  *   The search input calls api.searchUsers() after the user types at least 2 characters.
@@ -28,20 +31,27 @@
  *
  * Props:
  *   onClose      — called when the modal should close (backdrop click or Cancel button)
- *   initialTab   — "dm" or "group" — which tab to show on open (set by Sidebar buttons)
+ *   initialTab   — "dm", "group", or "discover" — which tab to show on open
  */
-import { useState } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { createPortal } from 'react-dom'
 import { api } from '../../services/api'
 import { useAuthStore } from '../../store/authStore'
 import { useChatStore } from '../../store/chatStore'
-import { X, Hash, Lock, User, Loader2, Search, MessageCircle, Users, Check } from 'lucide-react'
+import { X, Hash, Lock, User, Loader2, Search, MessageCircle, Users, Check, Compass } from 'lucide-react'
 import './CreateRoomModal.css'
 
 export default function CreateRoomModal({ onClose, initialTab = 'group' }) {
   const { user } = useAuthStore()
-  const { addRoom, setActiveRoom } = useChatStore()
+  const { addRoom, setActiveRoom, rooms } = useChatStore()
   const [tab, setTab] = useState(initialTab)
+
+  // Close on Escape key
+  useEffect(() => {
+    const handler = (e) => { if (e.key === 'Escape') onClose() }
+    document.addEventListener('keydown', handler)
+    return () => document.removeEventListener('keydown', handler)
+  }, [onClose])
   const [name, setName] = useState('')
   const [description, setDescription] = useState('')
   const [isPrivate, setIsPrivate] = useState(false)
@@ -50,6 +60,12 @@ export default function CreateRoomModal({ onClose, initialTab = 'group' }) {
   const [searchQuery, setSearchQuery] = useState('')
   const [searchResults, setSearchResults] = useState([])
   const [selectedUsers, setSelectedUsers] = useState([])
+
+  // Discover tab — public room search
+  const [discoverQuery, setDiscoverQuery] = useState('')
+  const [discoverResults, setDiscoverResults] = useState([])
+  const [discoverLoading, setDiscoverLoading] = useState(false)
+  const [joiningRoomId, setJoiningRoomId] = useState(null)
 
   /*
    * handleSearch — queries the auth-service for users matching the input.
@@ -73,6 +89,42 @@ export default function CreateRoomModal({ onClose, initialTab = 'group' }) {
   const toggleUser = (u) => {
     if (tab === 'dm') setSelectedUsers(prev => prev.length > 0 && prev[0].userId === u.userId ? [] : [u])
     else setSelectedUsers(prev => prev.find(x => x.userId === u.userId) ? prev.filter(x => x.userId !== u.userId) : [...prev, u])
+  }
+
+  /*
+   * handleDiscoverSearch — calls GET /rooms/search?q= to find public rooms on the platform.
+   * Filters out rooms the user already belongs to (they're already in the sidebar).
+   * Requires at least 1 character to search; empty query clears results.
+   */
+  const handleDiscoverSearch = useCallback(async (q) => {
+    setDiscoverQuery(q)
+    if (!q.trim()) { setDiscoverResults([]); return }
+    setDiscoverLoading(true)
+    try {
+      const results = await api.searchRooms(q.trim())
+      // Filter rooms the user is already a member of
+      const myRoomIds = new Set(rooms.map(r => r.roomId || r.id))
+      setDiscoverResults((results || []).filter(r => !myRoomIds.has(r.roomId || r.id)))
+    } catch { setDiscoverResults([]) }
+    finally { setDiscoverLoading(false) }
+  }, [rooms])
+
+  /*
+   * handleJoinRoom — adds the current user to a discovered public room.
+   * Calls POST /rooms/{id}/members/{uid}, then adds the room to the sidebar
+   * and navigates to it, closing the modal.
+   */
+  const handleJoinRoom = async (room) => {
+    setJoiningRoomId(room.roomId || room.id)
+    try {
+      await api.addMember(room.roomId || room.id, user.userId)
+      addRoom(room)
+      setActiveRoom(room.roomId || room.id)
+      onClose()
+    } catch (err) {
+      setError(err.message || 'Could not join room')
+      setJoiningRoomId(null)
+    }
   }
 
   /*
@@ -110,30 +162,34 @@ export default function CreateRoomModal({ onClose, initialTab = 'group' }) {
       <div role="dialog" className="modal-card clay-lg scale-in" onClick={e => e.stopPropagation()}>
         <div className="modal-head">
           <div className="modal-head-icon">
-            {tab === 'dm' ? <MessageCircle size={18}/> : <Users size={18}/>}
+            {tab === 'dm' ? <MessageCircle size={18}/> : tab === 'discover' ? <Compass size={18}/> : <Users size={18}/>}
           </div>
           <h2 className="modal-head-title">
-            {tab === 'dm' ? 'New direct message' : 'Create channel'}
+            {tab === 'dm' ? 'New direct message' : tab === 'discover' ? 'Discover rooms' : 'Create group'}
           </h2>
           <button className="icon-btn" onClick={onClose}><X size={18}/></button>
         </div>
 
-        {/* Tab switcher: Channel vs Direct Message */}
+        {/* Tab switcher: Channel | Direct message | Discover */}
         <div className="modal-tabs">
           <button className={`modal-tab ${tab === 'group' ? 'active' : ''}`} onClick={() => setTab('group')}>
-            <Hash size={14}/> Channel
+            <Users size={14}/> Group
           </button>
           <button className={`modal-tab ${tab === 'dm' ? 'active' : ''}`} onClick={() => setTab('dm')}>
             <User size={14}/> Direct message
           </button>
+          <button className={`modal-tab ${tab === 'discover' ? 'active' : ''}`} onClick={() => setTab('discover')}>
+            <Compass size={14}/> Discover
+          </button>
         </div>
 
-        <div className="modal-body">
+        {/* Group / DM body — hidden on Discover tab */}
+        {tab !== 'discover' && <div className="modal-body">
           {/* Group-only fields: name, description, private toggle */}
           {tab === 'group' && (
             <>
               <div className="form-group">
-                <label className="form-label">Channel name<span className="req">*</span></label>
+                <label className="form-label">Group name<span className="req">*</span></label>
                 <input
                   className="form-input"
                   placeholder="general-chat"
@@ -146,7 +202,7 @@ export default function CreateRoomModal({ onClose, initialTab = 'group' }) {
                 <label className="form-label">Description <span style={{ fontWeight: 400, color: 'var(--text-muted)' }}>(optional)</span></label>
                 <input
                   className="form-input"
-                  placeholder="What's this channel about?"
+                  placeholder="What's this group about?"
                   value={description}
                   onChange={e => setDescription(e.target.value)}
                 />
@@ -155,7 +211,7 @@ export default function CreateRoomModal({ onClose, initialTab = 'group' }) {
               <label className="priv-toggle">
                 <input type="checkbox" checked={isPrivate} onChange={e => setIsPrivate(e.target.checked)}/>
                 <Lock size={14}/>
-                <span>Private channel — only invited members can join</span>
+                <span>Private group — only invited members can join</span>
               </label>
             </>
           )}
@@ -167,7 +223,7 @@ export default function CreateRoomModal({ onClose, initialTab = 'group' }) {
               <Search size={15} style={{ position: 'absolute', left: 14, top: '50%', transform: 'translateY(-50%)', color: 'var(--text-muted)' }}/>
               <input
                 className="form-input"
-                placeholder="Search by username or email…"
+                placeholder="Search by name, username or email…"
                 value={searchQuery}
                 onChange={e => handleSearch(e.target.value)}
                 style={{ paddingLeft: 40 }}
@@ -211,14 +267,78 @@ export default function CreateRoomModal({ onClose, initialTab = 'group' }) {
           )}
 
           {error && <p className="error-text"><X size={14}/> {error}</p>}
-        </div>
+        </div>}
+
+        {/* ── Discover tab body ── */}
+        {tab === 'discover' && (
+          <div className="modal-body">
+            <p style={{ fontSize: 13, color: 'var(--text-muted)', marginBottom: 12 }}>
+              Search public rooms on the platform and join with one click.
+            </p>
+            <div style={{ position: 'relative', marginBottom: 12 }}>
+              <Search size={15} style={{ position: 'absolute', left: 14, top: '50%', transform: 'translateY(-50%)', color: 'var(--text-muted)' }}/>
+              <input
+                className="form-input"
+                placeholder="Search rooms by name…"
+                value={discoverQuery}
+                onChange={e => handleDiscoverSearch(e.target.value)}
+                style={{ paddingLeft: 40 }}
+                autoFocus
+              />
+            </div>
+
+            {discoverLoading && (
+              <div style={{ display: 'flex', justifyContent: 'center', padding: '16px 0' }}>
+                <Loader2 size={20} className="spin" style={{ color: 'var(--primary)' }}/>
+              </div>
+            )}
+
+            {!discoverLoading && discoverQuery && discoverResults.length === 0 && (
+              <div style={{ textAlign: 'center', padding: '24px 0', color: 'var(--text-muted)', fontSize: 13 }}>
+                No public rooms found for "{discoverQuery}"
+              </div>
+            )}
+
+            {discoverResults.length > 0 && (
+              <div className="mdl-results">
+                {discoverResults.map(room => (
+                  <div key={room.roomId || room.id} className="mdl-result" style={{ cursor: 'default' }}>
+                    <div className="mdl-result-av" style={{ background: 'var(--primary-soft)', color: 'var(--primary)' }}>
+                      <Hash size={14}/>
+                    </div>
+                    <div className="mdl-result-info" style={{ flex: 1 }}>
+                      <div className="mdl-result-name">{room.name}</div>
+                      <div className="mdl-result-email">
+                        {room.description || 'No description'} · {room.memberCount || 0} members
+                      </div>
+                    </div>
+                    <button
+                      className="btn btn-primary"
+                      style={{ padding: '5px 14px', fontSize: 12, flexShrink: 0 }}
+                      onClick={() => handleJoinRoom(room)}
+                      disabled={joiningRoomId === (room.roomId || room.id)}
+                    >
+                      {joiningRoomId === (room.roomId || room.id)
+                        ? <Loader2 size={13} className="spin"/>
+                        : 'Join'}
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {error && <p className="error-text"><X size={14}/> {error}</p>}
+          </div>
+        )}
 
         <div className="modal-foot">
           <button className="btn btn-ghost" onClick={onClose}>Cancel</button>
-          <button className="btn btn-primary" onClick={handleCreate} disabled={loading}>
-            {loading ? <Loader2 size={16} className="spin"/> : null}
-            {loading ? 'Creating…' : (tab === 'dm' ? 'Start chat' : 'Create channel')}
-          </button>
+          {tab !== 'discover' && (
+            <button className="btn btn-primary" onClick={handleCreate} disabled={loading}>
+              {loading ? <Loader2 size={16} className="spin"/> : null}
+              {loading ? 'Creating…' : (tab === 'dm' ? 'Start chat' : 'Create group')}
+            </button>
+          )}
         </div>
       </div>
     </div>,

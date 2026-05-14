@@ -28,18 +28,44 @@
  *   *                → redirect to /chat (catch-all)
  */
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
+import { lazy, Suspense, useEffect } from 'react'
 import { useAuthStore } from './store/authStore'
 import { ThemeProvider } from './theme/ThemeContext'
+import { ws } from './services/websocket'
 import LoginPage from './components/auth/LoginPage'
 import RegisterPage from './components/auth/RegisterPage'
 import VerifyEmailPage from './components/auth/VerifyEmailPage'
 import ForgotPasswordPage from './components/auth/ForgotPasswordPage'
 import OAuth2CallbackPage from './components/auth/OAuth2CallbackPage'
 import SuspendedPage from './components/auth/SuspendedPage'
-import ChatLayout from './components/layout/ChatLayout'
-import AdminDashboard from './components/admin/AdminDashboard'
-import BillingPage from './components/billing/BillingPage'
 import ToastContainer from './components/layout/ToastContainer'
+import BroadcastBanner from './components/common/BroadcastBanner'
+
+/*
+ * WebSocketKeepAlive — keeps the WebSocket open for any authenticated page,
+ * not just /chat. This means admins on /admin still receive platform broadcasts,
+ * and the connection is ready instantly when navigating to /chat.
+ * connect() is idempotent — ChatLayout calling it again is a no-op.
+ */
+function WebSocketKeepAlive() {
+  const token = useAuthStore(s => s.token)
+  useEffect(() => {
+    if (!token) return
+    ws.connect(token).catch(() => {})
+    return () => {
+      // Only disconnect if ChatLayout isn't mounted (it handles its own cleanup).
+      // We do a small delay so ChatLayout's own cleanup fires first on route change.
+      setTimeout(() => { if (!token) ws.disconnect() }, 200)
+    }
+  }, [token])
+  return null
+}
+
+// Lazy-load heavy routes so their JS is only downloaded when needed
+const ChatLayout = lazy(() => import('./components/layout/ChatLayout'))
+const AdminDashboard = lazy(() => import('./components/admin/AdminDashboard'))
+const BillingPage = lazy(() => import('./components/billing/BillingPage'))
+const JoinRoomPage = lazy(() => import('./components/chat/JoinRoomPage'))
 
 /*
  * ProtectedRoute — route wrapper that blocks unauthenticated access.
@@ -68,18 +94,23 @@ export default function App() {
   return (
     <ThemeProvider>
       <ToastContainer />
+      <BroadcastBanner />
+      <WebSocketKeepAlive />
       <BrowserRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
-        <Routes>
-          <Route path="/login" element={<PublicRoute><LoginPage /></PublicRoute>} />
-          <Route path="/register" element={<PublicRoute><RegisterPage /></PublicRoute>} />
-          <Route path="/forgot-password" element={<PublicRoute><ForgotPasswordPage /></PublicRoute>} />
-          <Route path="/verify-email" element={<PublicRoute><VerifyEmailPage /></PublicRoute>} />
-          <Route path="/oauth2/callback" element={<OAuth2CallbackPage />} />
-          <Route path="/admin" element={<ProtectedRoute><AdminDashboard /></ProtectedRoute>} />
-          <Route path="/billing" element={<ProtectedRoute><BillingPage /></ProtectedRoute>} />
-          <Route path="/chat/*" element={<ProtectedRoute><ChatLayout /></ProtectedRoute>} />
-          <Route path="*" element={<Navigate to="/chat" replace />} />
-        </Routes>
+        <Suspense fallback={<div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100vh' }}>Loading…</div>}>
+          <Routes>
+            <Route path="/login" element={<PublicRoute><LoginPage /></PublicRoute>} />
+            <Route path="/register" element={<PublicRoute><RegisterPage /></PublicRoute>} />
+            <Route path="/forgot-password" element={<PublicRoute><ForgotPasswordPage /></PublicRoute>} />
+            <Route path="/verify-email" element={<PublicRoute><VerifyEmailPage /></PublicRoute>} />
+            <Route path="/oauth2/callback" element={<OAuth2CallbackPage />} />
+            <Route path="/admin" element={<ProtectedRoute><AdminDashboard /></ProtectedRoute>} />
+            <Route path="/billing" element={<ProtectedRoute><BillingPage /></ProtectedRoute>} />
+            <Route path="/join/:code" element={<ProtectedRoute><JoinRoomPage /></ProtectedRoute>} />
+            <Route path="/chat/*" element={<ProtectedRoute><ChatLayout /></ProtectedRoute>} />
+            <Route path="*" element={<Navigate to="/chat" replace />} />
+          </Routes>
+        </Suspense>
       </BrowserRouter>
     </ThemeProvider>
   )

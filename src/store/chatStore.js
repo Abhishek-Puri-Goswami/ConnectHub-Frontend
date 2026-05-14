@@ -31,6 +31,7 @@ export const useChatStore = create((set, get) => ({
   messages: {},
   typingUsers: {},
   onlineUsers: new Set(),
+  presenceStatuses: {}, // userId → 'ONLINE'|'AWAY'|'DND'|'INVISIBLE'|'OFFLINE'
   members: {},
   unreadCounts: {},
   messageReactions: {},
@@ -46,6 +47,10 @@ export const useChatStore = create((set, get) => ({
     const existingRooms = s.rooms.filter(r => r.roomId !== room.roomId)
     return { rooms: [room, ...existingRooms] }
   }),
+  removeRoom: (roomId) => set(s => ({
+    rooms: s.rooms.filter(r => r.roomId !== roomId),
+    activeRoomId: s.activeRoomId === roomId ? null : s.activeRoomId,
+  })),
 
   /*
    * setMessages(roomId, msgs) — replaces the full message list for a room.
@@ -73,7 +78,13 @@ export const useChatStore = create((set, get) => ({
     )) return s
     const preview = msg.type === 'IMAGE' ? '📷 Photo'
       : msg.type === 'FILE' ? '📎 File'
-      : (msg.content || '').replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&quot;/g, '"').replace(/&#39;/g, "'").substring(0, 200)
+      : (() => {
+        try {
+          let t = (msg.content || '').replace(/&amp;/g,'&').replace(/&lt;/g,'<').replace(/&gt;/g,'>').replace(/&quot;/g,'"').replace(/&#39;/g,"'").replace(/&#x27;/g,"'")
+          const doc = new DOMParser().parseFromString(t, 'text/html')
+          return (doc.documentElement.textContent || t).substring(0, 200)
+        } catch { return (msg.content || '').substring(0, 200) }
+      })()
     return {
       messages: { ...s.messages, [roomId]: [...existing, msg] },
       rooms: s.rooms.map(r => r.roomId === roomId
@@ -124,6 +135,26 @@ export const useChatStore = create((set, get) => ({
   })),
 
   /*
+   * pinMessage(roomId, messageId) — marks one message as pinned, clears all others.
+   * Called when a PIN WebSocket event arrives; updates isPinned in the message list.
+   */
+  pinMessage: (roomId, messageId) => set(s => ({
+    messages: { ...s.messages, [roomId]: (s.messages[roomId] || []).map(m => ({
+      ...m, isPinned: m.messageId === messageId,
+    }))}
+  })),
+
+  /*
+   * unpinMessage(roomId) — clears isPinned from every message in the room.
+   * Called when an UNPIN WebSocket event arrives (messageId is null in the payload).
+   */
+  unpinMessage: (roomId) => set(s => ({
+    messages: { ...s.messages, [roomId]: (s.messages[roomId] || []).map(m => ({
+      ...m, isPinned: false,
+    }))}
+  })),
+
+  /*
    * updateRoomPreview(roomId, preview, senderId) — updates a room's last-message
    * preview text without touching the messages array.
    * Called when a NEW_MESSAGE notification arrives so the sidebar stays current
@@ -167,6 +198,25 @@ export const useChatStore = create((set, get) => ({
 
   setOffline: (userId) => set(s => {
     const next = new Set(s.onlineUsers); next.delete(userId); return { onlineUsers: next }
+  }),
+
+  /*
+   * setPresenceStatus(userId, status) — records the precise status for a user.
+   * Called when a presence WebSocket event arrives with a full status field.
+   * Components can read presenceStatuses[userId] to show AWAY/DND/INVISIBLE dots.
+   */
+  setPresenceStatus: (userId, status) => set(s => ({
+    presenceStatuses: { ...s.presenceStatuses, [userId]: status }
+  })),
+
+  /*
+   * setBulkPresenceStatuses(list) — batch-updates presenceStatuses from a getBulkPresence response.
+   * Called after fetching presence for a set of users (e.g., when opening the members tab).
+   */
+  setBulkPresenceStatuses: (list) => set(s => {
+    const next = { ...s.presenceStatuses }
+    list.forEach(p => { if (p.userId != null) next[p.userId] = p.status || 'OFFLINE' })
+    return { presenceStatuses: next }
   }),
 
   /*

@@ -7,17 +7,17 @@
  *   this store to be imported only in billing-related components.
  *
  * How the upgrade flow works end-to-end:
- *   1. User clicks "Upgrade to PRO" → openUpgradeModal() shows the UpgradeModal.
- *   2. User clicks "Subscribe" in the modal → initiateCheckout() is called.
- *   3. initiateCheckout() calls paymentApi.createSubscription() to create the
+ *   1. User clicks "Upgrade" → openUpgradeModal() shows the UpgradeModal.
+ *   2. User selects a plan (PREMIUM or PLATINUM) and clicks "Subscribe".
+ *   3. initiateCheckout() calls paymentApi.createOrder(plan) to create the
  *      one-time Razorpay order on the backend. The backend returns a razorpayOrderId.
- *   4. initiateCheckout() opens the Razorpay Checkout widget (window.Razorpay)
- *      with the order ID. The user completes payment in the widget.
+ *   4. initiateCheckout() opens the Razorpay Checkout widget with the order ID and
+ *      the plan-specific amount. The user completes payment in the widget.
  *   5. Razorpay sends a webhook to the payment-service backend (async).
- *      The backend upgrades the user's subscriptionTier to PRO.
+ *      The backend upgrades the user's subscriptionTier to the selected plan.
  *   6. The handler callback calls refreshAuthAfterPayment() which calls the token
  *      refresh endpoint to get an updated JWT that includes the new tier claim.
- *   7. Then fetchSubscription() is called to update the UI to show PRO status.
+ *   7. Then fetchSubscription() is called to update the UI to show the plan status.
  *
  * State fields:
  *   subscription    — current subscription object { id, plan, status, razorpayOrderId, ... }
@@ -33,15 +33,24 @@ import { paymentApi } from "../services/paymentApi";
 import { api } from "../services/api";
 import { useAuthStore } from "./authStore";
 
+/** Plan display names and pricing (paise). Kept in sync with backend config. */
+const PLAN_CONFIG = {
+  PREMIUM:  { label: "Premium",  amountPaise: 10000, amountDisplay: "₹100" },
+  PLATINUM: { label: "Platinum", amountPaise: 14900, amountDisplay: "₹149" },
+};
+
 export const usePaymentStore = create((set, get) => ({
   subscription: null,
   payments: [],
   loading: false,
   error: null,
   upgradeModalOpen: false,
+  upgradeModalPlan: 'PLATINUM',
   razorpayReady: false,
 
-  openUpgradeModal: () => set({ upgradeModalOpen: true }),
+  /* openUpgradeModal(plan?) — opens the upgrade modal, optionally pre-selecting a plan.
+   * If no plan is passed, defaults to PLATINUM (the highlighted/recommended tier). */
+  openUpgradeModal: (plan) => set({ upgradeModalOpen: true, upgradeModalPlan: plan || 'PLATINUM' }),
   closeUpgradeModal: () => set({ upgradeModalOpen: false }),
 
   /*
@@ -79,7 +88,7 @@ export const usePaymentStore = create((set, get) => ({
    * subscriptionTier. However, the existing JWT still contains the old tier.
    * This method calls api.refreshSession() to get a fresh JWT that includes the
    * updated tier, then pushes the new token and user object into authStore so
-   * the entire app immediately reflects the PRO status.
+   * the entire app immediately reflects the paid status.
    */
   refreshAuthAfterPayment: async () => {
     await api.refreshSession();
@@ -106,59 +115,57 @@ export const usePaymentStore = create((set, get) => ({
   },
 
   /*
-   * initiateCheckout({ razorpayKeyId, userEmail, userName }) — opens the Razorpay payment widget.
+   * initiateCheckout({ razorpayKeyId, userEmail, userName, plan }) — opens the Razorpay payment widget.
    *
    * Steps:
-   *   1. Calls paymentApi.createOrder() to create a Razorpay order on the backend
+   *   1. Calls paymentApi.createOrder(plan) to create a Razorpay order on the backend
    *      and get back a razorpayOrderId.
    *   2. Creates a new window.Razorpay instance with the order ID and prefills
    *      the user's email and name so they don't have to type them again.
    *   3. Calls rzp.open() to show the Razorpay payment popup to the user.
    *   4. On successful payment (handler callback): calls refreshAuthAfterPayment()
-   *      and fetchSubscription() to update the UI to show PRO.
+   *      and fetchSubscription() to update the UI.
    *   5. On modal dismiss (user closed without paying): rejects the Promise so the
    *      calling component can show a "cancelled" message.
    */
-  initiateCheckout: async ({ razorpayKeyId, userEmail, userName }) => {
+  initiateCheckout: async ({ razorpayKeyId, userEmail, userName, plan = "PREMIUM" }) => {
     if (!window.Razorpay) {
       throw new Error("Razorpay SDK not loaded. Refresh and try again.");
     }
     set({ loading: true, error: null });
     try {
-      // Always fetch the key from the backend so test/live mode is driven by
-      // server config, not a frontend env var that can easily get out of sync.
+      // Fetch latest config from backend (key + amounts for both plans)
       let keyId = razorpayKeyId;
-      let amountPaise;
+      let planCfg = PLAN_CONFIG[plan] || PLAN_CONFIG.PREMIUM;
+      let amountPaise = planCfg.amountPaise;
       try {
         const cfg = await paymentApi.getConfig();
         if (cfg?.razorpayKeyId) keyId = cfg.razorpayKeyId;
-        if (cfg?.amountPaise) amountPaise = cfg.amountPaise;
+        // Use backend amounts if available (they are the source of truth)
+        if (plan === "PLATINUM" && cfg?.platinumAmountPaise) {
+          amountPaise = cfg.platinumAmountPaise;
+        } else if (cfg?.premiumAmountPaise) {
+          amountPaise = cfg.premiumAmountPaise;
+        }
       } catch {
         // fall back to the caller-supplied key (env var) if config endpoint fails
       }
 
-      const sub = await paymentApi.createOrder();
-      const razorpayOrderId = sub.razorpayOrderId;
-      const normalizedAmount = Number(amountPaise);
-      const validAmount =
-        Number.isInteger(normalizedAmount) && normalizedAmount >= 100
-          ? normalizedAmount
-          : 9900;
+      const sub = await paymentApi.createSubscription(plan);
+      const rzpSubscriptionId = sub.razorpaySubscriptionId;
 
       return new Promise((resolve, reject) => {
         const rzp = new window.Razorpay({
           key: keyId,
-          order_id: razorpayOrderId,
-          amount: validAmount,
-          currency: "INR",
+          subscription_id: rzpSubscriptionId,
           name: "ConnectHub",
-          description: "ConnectHub PRO one-time upgrade",
+          description: `ConnectHub ${planCfg.label} — ₹${amountPaise / 100}/month`,
           image: "/logo.png",
           prefill: {
             email: userEmail || "",
             name: userName || "",
           },
-          theme: { color: "#7C3AED" },
+          theme: { color: plan === "PLATINUM" ? "#D97706" : "#7C3AED" },
           handler: async function (response) {
             set({ loading: false });
             try {
@@ -185,7 +192,23 @@ export const usePaymentStore = create((set, get) => ({
   },
 
   /*
-   * isPro() — returns true if the user has an active paid subscription.
+   * cancelSubscription() — cancels the recurring subscription at cycle end.
+   * The user keeps access until endDate. Updates local subscription state on success.
+   */
+  cancelSubscription: async () => {
+    set({ loading: true, error: null });
+    try {
+      await paymentApi.cancelSubscription();
+      await usePaymentStore.getState().fetchSubscription();
+      set({ loading: false });
+    } catch (e) {
+      set({ error: e.message, loading: false });
+      throw e;
+    }
+  },
+
+  /*
+   * isPro() — returns true if the user has an active paid subscription (PREMIUM or PLATINUM).
    * Checks that the plan is not FREE and the status is not CANCELLED or EXPIRED.
    * Used by components to decide whether to show upgrade prompts or unlock features.
    */

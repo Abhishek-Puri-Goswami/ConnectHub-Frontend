@@ -55,7 +55,7 @@
 }
 .empty-sub {
   font-size: 15px; color: var(--text-soft); line-height: 1.6;
-  max-width: 420px; margin-bottom: 28px;
+  max-width: 420px; margin-bottom: 20px;
 }
 
 .empty-features {
@@ -82,8 +82,51 @@
 .empty-feature-title { font-size: 14px; font-weight: 700; color: var(--text); margin-bottom: 2px; }
 .empty-feature-sub { font-size: 12px; color: var(--text-muted); }
 
-.empty-shortcuts {
-  display: flex; flex-wrap: wrap; gap: 8px 16px; justify-content: center;
-  font-size: 12.5px; color: var(--text-soft);
+/* ── CTA buttons ── */
+.empty-actions {
+  display: flex; gap: 10px; flex-wrap: wrap; justify-content: center;
+  margin-bottom: 32px;
 }
-.empty-shortcuts div { display: inline-flex; align-items: center; gap: 4px; }
+
+.empty-action-btn {
+  display: inline-flex; align-items: center; gap: 6px;
+  padding: 10px 22px;
+  border-radius: var(--r-full);
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--text-soft);
+  font-size: 13px; font-weight: 700;
+  cursor: pointer;
+  box-shadow: var(--clay-shadow-sm);
+  transition: all 0.18s var(--ease);
+}
+
+.empty-action-btn:hover {
+  transform: translateY(-2px);
+  box-shadow: var(--clay-shadow);
+  border-color: var(--border-strong);
+  color: var(--text);
+}
+
+.empty-action-btn.primary {
+  background: linear-gradient(135deg, var(--primary) 0%, var(--primary-hover) 100%);
+  color: #fff;
+  border-color: transparent;
+  box-shadow: var(--clay-button-shadow);
+}
+
+.empty-action-btn.primary:hover {
+  filter: brightness(1.05);
+  transform: translateY(-2px);
+  box-shadow: 0 10px 24px rgba(255,142,114,0.45), inset 0 1px 0 rgba(255,255,255,0.3);
+}
+
+@media (max-width: 600px) {
+  .empty-hero-icon { width: 88px; height: 88px; margin-bottom: 16px; }
+  .empty-title { font-size: 22px; }
+  .empty-sub { font-size: 13.5px; margin-bottom: 16px; }
+  .empty-features { grid-template-columns: 1fr; gap: 8px; margin-bottom: 20px; }
+  .empty-actions { flex-direction: column; align-items: stretch; gap: 8px; }
+  .empty-action-btn { justify-content: center; }
+  .empty-body { padding: 16px; }
+}

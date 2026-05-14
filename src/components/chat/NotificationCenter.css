@@ -64,6 +64,44 @@
   margin-top: 4px;
 }
 
+/* Delete (×) button — hidden until row is hovered */
+.nc-delete {
+  flex-shrink: 0;
+  display: flex; align-items: center; justify-content: center;
+  width: 22px; height: 22px;
+  background: transparent;
+  border: none;
+  border-radius: var(--r-xs);
+  color: var(--text-muted);
+  opacity: 0;
+  transition: opacity 0.15s var(--ease), background 0.15s var(--ease), color 0.15s var(--ease);
+  cursor: pointer;
+  margin-top: 2px;
+}
+.nc-item:hover .nc-delete {
+  opacity: 1;
+}
+.nc-delete:hover {
+  background: var(--danger-soft, rgba(244,113,116,0.12));
+  color: var(--danger);
+}
+
+@media (max-width: 600px) {
+  /* Drop down from the top as a sheet on mobile */
+  .nc-dropdown {
+    position: fixed;
+    top: auto;
+    bottom: 0; left: 0; right: 0;
+    width: 100%;
+    max-height: 60vh;
+    border-radius: var(--r-xl) var(--r-xl) 0 0;
+    border-top: 1px solid var(--border);
+    animation: slideInUp 0.22s var(--ease-out);
+  }
+  /* Bigger tap targets for notification items */
+  .nc-item { padding: 14px 16px; }
+}
+
 @media (max-width: 400px) {
   .nc-dropdown { width: calc(100vw - 24px); right: -20px; }
 }

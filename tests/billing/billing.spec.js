@@ -46,8 +46,8 @@ test.describe('Billing Page', () => {
   test('renders the billing page for a FREE plan user', async ({ page }) => {
     await gotoBilling(page, MOCK_SUBSCRIPTION)
 
-    await expect(page.getByText(/FREE|Free Plan/i)).toBeVisible()
-    await expect(page.getByRole('button', { name: /Upgrade to PRO/i })).toBeVisible()
+    await expect(page.locator('.billing-plan-badge.free')).toBeVisible()
+    await expect(page.getByRole('button', { name: /Upgrade to Premium/i })).toBeVisible()
   })
 
   test('shows FREE plan feature limits', async ({ page }) => {
@@ -73,23 +73,25 @@ test.describe('Billing Page', () => {
   test('renders the billing page for a PRO plan user', async ({ page }) => {
     await gotoBilling(page, MOCK_PRO_SUBSCRIPTION)
 
-    await expect(page.getByText(/PRO|Pro Plan/i)).toBeVisible()
+    // plan='PREMIUM' → badge class is 'billing-plan-badge pro', text is 'PREMIUM'
+    await expect(page.locator('.billing-plan-badge.pro')).toBeVisible()
     await expect(page.getByRole('button', { name: /Upgrade/i })).not.toBeVisible()
   })
 
   test('shows PRO plan feature limits', async ({ page }) => {
     await gotoBilling(page, MOCK_PRO_SUBSCRIPTION)
 
-    await expect(page.getByText(/30 msg\/min|30 messages/i)).toBeVisible()
-    await expect(page.getByText(/10GB|10 GB/i)).toBeVisible()
-    await expect(page.getByText(/unlimited|Unlimited/i)).toBeVisible()
+    // PREMIUM plan features (BillingPage checks plan === 'PREMIUM')
+    await expect(page.getByText(/10 messages\/min|10 msg/i)).toBeVisible()
+    await expect(page.getByText(/4GB|4 GB/i)).toBeVisible()
+    await expect(page.getByText(/90-day|message history/i)).toBeVisible()
   })
 
   test('shows subscription details for PRO user', async ({ page }) => {
     await gotoBilling(page, MOCK_PRO_SUBSCRIPTION)
 
-    await expect(page.getByText(/Subscription|sub-/i)).toBeVisible()
-    await expect(page.getByText(/ACTIVE/i)).toBeVisible()
+    await expect(page.locator('.billing-detail-value').filter({ hasText: /sub-/i })).toBeVisible()
+    await expect(page.getByText(/ACTIVE/i).first()).toBeVisible()
   })
 
   // ── Payment history ───────────────────────────────────────────────────────
@@ -97,21 +99,21 @@ test.describe('Billing Page', () => {
   test('renders payment history rows', async ({ page }) => {
     await gotoBilling(page, MOCK_PRO_SUBSCRIPTION, MOCK_PAYMENTS)
 
-    await expect(page.getByText('PRO subscription')).toBeVisible()
+    await expect(page.getByText('PRO subscription', { exact: true })).toBeVisible()
     await expect(page.getByText('TXN123456')).toBeVisible()
   })
 
   test('shows correct amount formatted from paise', async ({ page }) => {
     await gotoBilling(page, MOCK_PRO_SUBSCRIPTION, MOCK_PAYMENTS)
 
-    // 49900 paise = ₹499.00
-    await expect(page.getByText(/499|₹499/)).toBeVisible()
+    // 49900 paise = ₹499.00 (two rows exist; .first() avoids strict mode violation)
+    await expect(page.getByText(/499|₹499/).first()).toBeVisible()
   })
 
   test('shows payment status badge', async ({ page }) => {
     await gotoBilling(page, MOCK_PRO_SUBSCRIPTION, MOCK_PAYMENTS)
 
-    await expect(page.getByText(/SUCCESS|Paid/i)).toBeVisible()
+    await expect(page.getByText(/SUCCESS|Paid/i).first()).toBeVisible()
   })
 
   test('renders multiple payment rows', async ({ page }) => {
@@ -141,10 +143,10 @@ test.describe('Billing Page', () => {
       })
     })
 
-    await page.getByRole('button', { name: /Upgrade to PRO/i }).click()
+    await page.getByRole('button', { name: /Upgrade to Premium/i }).click()
 
-    // The upgrade modal should appear
-    await expect(page.getByRole('dialog')).toBeVisible()
+    // The upgrade modal should appear (upgrade form uses .upgrade-overlay, not role=dialog)
+    await expect(page.locator('.upgrade-overlay')).toBeVisible()
   })
 
   // ── Navigation ────────────────────────────────────────────────────────────

@@ -6,16 +6,16 @@
  *   user subscriptions via the Razorpay payment gateway.
  *
  * How payments work in ConnectHub:
- *   There are two tiers: FREE and PRO.
+ *   There are three tiers: FREE, PREMIUM (₹99), and PLATINUM (₹149).
  *   - FREE users: limited messages per hour, smaller file upload limit.
- *   - PRO users: higher limits, unlocked after a successful one-time payment.
+ *   - PREMIUM/PLATINUM users: higher limits, unlocked after a successful one-time payment.
  *
  *   The payment flow works as follows:
- *   1. The frontend calls createOrder() to ask the backend to create a
- *      one-time Razorpay order. The backend returns a razorpayOrderId.
+ *   1. The frontend calls createOrder(plan) to ask the backend to create a
+ *      one-time Razorpay order for the selected plan. The backend returns a razorpayOrderId.
  *   2. The frontend opens the Razorpay checkout widget using that order ID.
  *   3. After payment, Razorpay sends a webhook to the backend (payment-service),
- *      which upgrades the user's plan to PRO in the database.
+ *      which upgrades the user's plan in the database.
  *   4. The frontend calls getSubscriptionStatus() to confirm the upgrade and
  *      update the user object stored in localStorage/authStore.
  *
@@ -23,7 +23,7 @@
  * that attaches the JWT token. Kept separate from the main api.js to isolate
  * all payment-related calls in one place for clarity.
  */
-const API = "/api/v1";
+const API = import.meta.env.VITE_API_BASE_URL || "/api/v1";
 
 class PaymentApiService {
   /*
@@ -55,15 +55,20 @@ class PaymentApiService {
   }
 
   /*
-   * createOrder() — creates a Razorpay Order for the one-time PRO upgrade.
+   * createOrder(plan) — creates a Razorpay Order for a one-time upgrade.
+   * @param plan — "PREMIUM" or "PLATINUM"
    * Returns: { id, userId, plan, status, razorpayOrderId, startDate }
    */
   getConfig() {
     return this.req("GET", "/payments/subscription/config");
   }
 
-  createOrder() {
-    return this.req("POST", "/payments/subscription/create", {});
+  createSubscription(plan = "PREMIUM") {
+    return this.req("POST", "/payments/subscription/create", { plan });
+  }
+
+  cancelSubscription() {
+    return this.req("POST", "/payments/subscription/cancel");
   }
 
   /*

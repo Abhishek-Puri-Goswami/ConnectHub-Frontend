@@ -104,6 +104,62 @@ class AdminApiService {
   getOnlineCount() {
     return this.req('GET', '/presence/online/count')
   }
+
+  /*
+   * getActiveRoomCount() — rooms with at least one message (platform analytics).
+   * getDailyMessageCount() — total messages sent today across all rooms.
+   * getTotalStorageUsed() — bytes of media stored across all uploads.
+   */
+  getActiveRoomCount() {
+    return this.req('GET', '/rooms/count/active')
+  }
+  getDailyMessageCount() {
+    return this.req('GET', '/messages/count/today')
+  }
+  getTotalStorageUsed() {
+    return this.req('GET', '/media/storage/total')
+  }
+
+  /*
+   * getAllRooms(page, size) — paginated list of every room on the platform.
+   * PLATFORM_ADMIN only. Returns Spring Page with content array, totalElements, totalPages.
+   */
+  getAllRooms(page = 0, size = 20) {
+    return this.req('GET', `/rooms?page=${page}&size=${size}`)
+  }
+
+  /*
+   * adminDeleteRoom(roomId) — permanently deletes a room and all its members.
+   * PLATFORM_ADMIN only — bypasses the creator-only restriction in room-service.
+   */
+  adminDeleteRoom(roomId) {
+    return this.req('DELETE', `/rooms/${roomId}`)
+  }
+
+  /*
+   * adminDeleteMessage(messageId) — soft-deletes any message on the platform.
+   * PLATFORM_ADMIN only — bypasses sender/room-admin restriction in message-service.
+   */
+  adminDeleteMessage(messageId) {
+    return this.req('DELETE', `/messages/${messageId}`)
+  }
+
+  sendBroadcast(title, message) {
+    return this.req('POST', '/ws/broadcast', { title, message })
+  }
+
+  getAnalytics() {
+    return this.req('GET', '/auth/admin/analytics')
+  }
+
+  /*
+   * getWsConnectionCount() — returns the total number of live WebSocket sessions
+   * across all pods. A user with two browser tabs open counts as 2 connections.
+   * PLATFORM_ADMIN only. Backed by a Redis counter in websocket-service.
+   */
+  getWsConnectionCount() {
+    return this.req('GET', '/ws/connections/count')
+  }
 }
 
 export const adminApi = new AdminApiService()

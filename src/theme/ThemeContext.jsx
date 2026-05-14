@@ -1,58 +1,75 @@
 /*
- * ThemeContext.jsx — Global Light/Dark Theme Management
+ * ThemeContext.jsx — Global Theme Management (Light / Dark / Ocean / Forest / Rose / Midnight)
  *
  * Purpose:
- *   Provides light/dark theme state to every component in the app without
- *   needing to pass props manually down through every level of the component tree.
+ *   Provides theme state to every component in the app without prop drilling.
+ *   Supports six themes: light, dark, ocean, forest, rose, midnight.
  *
  * How it works:
  *   1. ThemeProvider reads the user's previously saved preference from localStorage
- *      on startup. If no preference was saved, it falls back to the OS/browser
- *      setting (window.matchMedia prefers-color-scheme).
+ *      on startup. Falls back to OS preference (prefers-color-scheme) → 'light'.
  *
  *   2. Whenever the theme changes, a useEffect writes the new value to:
- *      - The <html data-theme="..."> attribute → so CSS variables like
- *        --background, --text, etc. switch automatically via CSS selectors.
- *      - localStorage → so the preference survives page refreshes.
- *      - document.documentElement.style.colorScheme → so browser native
- *        controls (scrollbars, inputs) also switch to the correct OS mode.
+ *      - <html data-theme="..."> → CSS variables switch automatically.
+ *      - localStorage → preference survives page refreshes.
+ *      - document.documentElement.style.colorScheme → native controls update.
  *
- *   3. Any component that needs to read or toggle the theme calls useTheme(),
- *      which returns { theme, setTheme, toggle }. useTheme() throws if called
- *      outside a ThemeProvider to catch accidental misuse early.
+ *   3. useTheme() returns { theme, setTheme, toggle, isDark }.
+ *
+ * THEMES — exported array used by ThemeToggle to render the palette picker.
+ *   Each entry: { id, name, primary, bg, text, dark }
  */
 import { createContext, useContext, useEffect, useState } from 'react'
 
 const ThemeContext = createContext(null)
 const STORAGE_KEY = 'connecthub-theme'
 
+/* Themes that should use colorScheme: 'dark' for browser native controls */
+const DARK_THEMES = new Set(['dark', 'midnight'])
+
+/* Ordered list of all available themes */
+export const THEMES = [
+  { id: 'light',    name: 'Light',    primary: '#FF8E72', bg: '#FDF6EC', text: '#2D2438', dark: false },
+  { id: 'ocean',    name: 'Ocean',    primary: '#0EA5E9', bg: '#F0F9FF', text: '#0F172A', dark: false },
+  { id: 'forest',   name: 'Forest',   primary: '#16A34A', bg: '#F0FDF4', text: '#052E16', dark: false },
+  { id: 'rose',     name: 'Rose',     primary: '#EC4899', bg: '#FFF1F5', text: '#1F0214', dark: false },
+  { id: 'dark',     name: 'Dark',     primary: '#FF9F87', bg: '#252136', text: '#F5EDE0', dark: true  },
+  { id: 'midnight', name: 'Midnight', primary: '#6366F1', bg: '#111827', text: '#F1F5F9', dark: true  },
+]
+
+const VALID_IDS = new Set(THEMES.map(t => t.id))
+
 export function ThemeProvider({ children }) {
   /*
-   * Lazy initial state: the function runs only once on mount.
-   * Priority order: localStorage saved value → OS preference → 'light' fallback.
+   * Lazy initial state: reads from localStorage first, falls back to OS pref.
    */
   const [theme, setTheme] = useState(() => {
     if (typeof window === 'undefined') return 'light'
     const saved = localStorage.getItem(STORAGE_KEY)
-    if (saved === 'light' || saved === 'dark') return saved
+    if (saved && VALID_IDS.has(saved)) return saved
     return window.matchMedia?.('(prefers-color-scheme: dark)').matches ? 'dark' : 'light'
   })
 
+  const isDark = DARK_THEMES.has(theme)
+
   /*
-   * Sync the DOM and localStorage every time theme changes.
-   * CSS variables react to [data-theme="dark"] selector in index.css.
+   * Sync the DOM and localStorage whenever theme changes.
+   * CSS variables react to [data-theme="..."] selectors in index.css.
    */
   useEffect(() => {
     document.documentElement.setAttribute('data-theme', theme)
     localStorage.setItem(STORAGE_KEY, theme)
-    document.documentElement.style.colorScheme = theme
-  }, [theme])
+    document.documentElement.style.colorScheme = isDark ? 'dark' : 'light'
+  }, [theme, isDark])
 
-  /* toggle() flips between 'light' and 'dark'. Used by ThemeToggle button. */
-  const toggle = () => setTheme(t => (t === 'light' ? 'dark' : 'light'))
+  /*
+   * toggle() cycles: light → dark → light (or any dark ↔ light flip).
+   * Kept for backwards compat with any component that still calls it.
+   */
+  const toggle = () => setTheme(t => (DARK_THEMES.has(t) ? 'light' : 'dark'))
 
   return (
-    <ThemeContext.Provider value={{ theme, setTheme, toggle }}>
+    <ThemeContext.Provider value={{ theme, setTheme, toggle, isDark }}>
       {children}
     </ThemeContext.Provider>
   )
@@ -60,8 +77,7 @@ export function ThemeProvider({ children }) {
 
 /*
  * useTheme — custom hook for consuming the theme context.
- * Returns { theme, setTheme, toggle }.
- * Throws a clear error if called outside <ThemeProvider>.
+ * Returns { theme, setTheme, toggle, isDark }.
  */
 export function useTheme() {
   const ctx = useContext(ThemeContext)
