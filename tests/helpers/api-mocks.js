@@ -45,6 +45,9 @@ export const MOCK_ROOM = {
   description: 'General discussion',
   createdBy: 'user-1',
   lastMessageAt: new Date().toISOString(),
+  // Provide a preview so ChatLayout skips the api.getMessages() preview fetch
+  // (condition: lastMessageAt && !lastMessagePreview → triggers the fetch)
+  lastMessagePreview: 'Welcome to General',
   createdAt: '2024-01-01T00:00:00Z',
   memberCount: 5,
 }
@@ -131,7 +134,7 @@ export async function mockChatApis(page, options = {}) {
   const subscription = options.subscription || MOCK_SUBSCRIPTION
   const payments     = options.payments     || []
 
-  // User rooms list (ChatLayout initial load)
+  // User rooms list (ChatLayout initial load) — GET /api/v1/rooms/user/{userId}
   await page.route('**/api/v1/rooms/user/**', route =>
     route.fulfill({ json: rooms })
   )
@@ -145,37 +148,45 @@ export async function mockChatApis(page, options = {}) {
     route.fulfill({ json: [{ userId: MOCK_USER.userId, role: 'MEMBER', fullName: MOCK_USER.fullName, username: MOCK_USER.username }] })
   )
 
-  // User profile (enrichRoomMembers fetches each member's profile)
+  // User profile — GET /api/v1/auth/profile/{userId}
+  // ChatLayout calls this on mount to refresh avatarUrl; enrichRoomMembers also calls it
   await page.route('**/api/v1/auth/profile/**', route =>
     route.fulfill({ json: MOCK_USER })
   )
 
-  // Per-room unread counts from WebSocket service
+  // Per-room unread counts — GET /api/v1/ws/unread/{userId}
   await page.route('**/api/v1/ws/unread/**', route =>
     route.fulfill({ json: {} })
   )
 
-  // Presence (online / offline / ping / bulk)
+  // Presence — covers online/offline/ping/bulk/status/initStatus
   await page.route('**/api/v1/presence/**', route =>
-    route.fulfill({ status: 200, json: { online: false } })
+    route.fulfill({ status: 200, json: { online: false, status: 'ONLINE' } })
   )
 
-  // Subscription status (ChatLayout fetches on mount for Sidebar CTA)
+  // Subscription status — GET /api/v1/payments/subscription/status
   await page.route('**/api/v1/payments/subscription/status', route =>
     route.fulfill({ json: subscription })
   )
 
-  // Payment history (BillingPage)
+  // Payment history — GET /api/v1/payments/subscription/payments
   await page.route('**/api/v1/payments/subscription/payments', route =>
     route.fulfill({ json: payments })
   )
 
-  // Notifications (bell icon unread count + list)
+  // Notifications — covers unread-count, list, email-preferences
   await page.route('**/api/v1/notifications/**', route =>
     route.fulfill({ json: { count: 0 } })
   )
 
-  // User search — default empty; override per-test with mockUserSearch
+  // Message preview fetch — ChatLayout calls GET /api/v1/messages/room/{roomId}?limit=1
+  // for rooms that have lastMessageAt but no stored lastMessagePreview.
+  // Without this mock the call fails and can leave the sidebar in a loading state.
+  await page.route('**/api/v1/messages/room/**', route =>
+    route.fulfill({ json: { content: [], totalElements: 0 } })
+  )
+
+  // User search — default empty
   await page.route('**/api/v1/auth/search**', route =>
     route.fulfill({ json: [] })
   )
