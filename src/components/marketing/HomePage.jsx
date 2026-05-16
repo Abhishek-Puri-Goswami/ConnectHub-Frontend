@@ -203,7 +203,18 @@ export default function HomePage() {
 
       {/* ─── FOOTER ─── */}
       <footer className="home-footer">
-        <p>© 2026 ConnectHub. Developed by <strong>Abhishek Puri Goswami</strong>. All rights reserved.</p>
+        <div className="footer-content">
+          <div className="footer-left">
+            <span className="footer-brand">ConnectHub</span>
+            <span className="footer-copyright">© {new Date().getFullYear()} All rights reserved.</span>
+          </div>
+          <div className="footer-right">
+            <span>Developed by</span>
+            <a href="https://github.com/Abhishek-Puri-Goswami" target="_blank" rel="noopener noreferrer" className="developer-link">
+              Abhishek Puri Goswami
+            </a>
+          </div>
+        </div>
       </footer>
     </div>
   );
