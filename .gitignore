@@ -12,3 +12,6 @@ dist
 # Test artifacts
 playwright-report/
 test-results/
+
+# Coverage reports (uploaded to GitHub Actions artifacts + read by SonarCloud)
+coverage/

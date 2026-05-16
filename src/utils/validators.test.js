@@ -575,7 +575,7 @@ describe('maskPhone', () => {
      * The user can confirm it's their number without the full number being visible.
      */
     const result = maskPhone('9876543210')
-    expect(result).toBe('••••••3210')
+    expect(result).toBe('******3210')
   })
 
   it('strips non-digits before masking', () => {

@@ -108,7 +108,7 @@ export default defineConfig({
     exclude: ["node_modules/**", "tests/**"],
     coverage: {
       provider: "v8",
-      reporter: ["text", "html"],
+      reporter: ["text", "html", "lcov"],
       exclude: [
         "node_modules/**",
         "**/*.test.js",

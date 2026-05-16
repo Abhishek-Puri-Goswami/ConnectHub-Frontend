@@ -1,0 +1,106 @@
+name: SonarCloud Analysis – Frontend
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  sonar:
+    name: Unit Tests, E2E Smoke & Analyze
+    runs-on: ubuntu-latest
+
+    steps:
+      # ── Checkout ────────────────────────────────────────────────────────────
+      - name: Checkout source
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0          # Full history required for SonarCloud blame
+
+      # ── Node.js ─────────────────────────────────────────────────────────────
+      - name: Set up Node.js 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      # ── Cache SonarCloud packages ────────────────────────────────────────────
+      - name: Cache SonarCloud packages
+        uses: actions/cache@v4
+        with:
+          path: ~/.sonar/cache
+          key: ${{ runner.os }}-sonar
+          restore-keys: ${{ runner.os }}-sonar
+
+      # ── Vitest Unit Tests + Coverage (lcov for SonarCloud) ──────────────────
+      # Runs all src/**/*.test.{js,jsx} files. Produces:
+      #   coverage/lcov.info  → read by SonarCloud
+      #   coverage/index.html → human-readable report
+      - name: Run Vitest unit tests with coverage
+        run: npm run test:unit:coverage
+
+      # ── Upload Vitest coverage report as artifact ────────────────────────────
+      - name: Upload unit-test coverage report
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: vitest-coverage-report
+          path: coverage/
+          retention-days: 7
+
+      # ── Install Playwright browsers (Chromium only for CI speed) ─────────────
+      - name: Install Playwright browsers
+        run: npx playwright install chromium --with-deps
+
+      # ── Playwright E2E Smoke Tests (mocked API, no real backend) ────────────
+      # Only runs the smoke suite in CI — full suite is run locally.
+      # The smoke tests use page.route() to stub all API calls, so no backend is needed.
+      - name: Run Playwright smoke tests
+        run: npx playwright test tests/smoke --project=chromium
+        env:
+          CI: true
+          # Point baseURL at the Vite dev server started by webServer in playwright.config.js
+          PLAYWRIGHT_BASE_URL: http://localhost:5173
+          # Dummy env vars so Vite starts without crashing on missing secrets
+          VITE_API_BASE_URL: http://localhost:8080
+          VITE_WS_URL: ws://localhost:8080
+          VITE_OAUTH_BASE_URL: http://localhost:8080
+          VITE_RAZORPAY_KEY_ID: test_key
+          VITE_ENABLE_PAYMENTS: 'false'
+          VITE_FIREBASE_API_KEY: test
+          VITE_FIREBASE_AUTH_DOMAIN: test.firebaseapp.com
+          VITE_FIREBASE_PROJECT_ID: test-project
+          VITE_FIREBASE_STORAGE_BUCKET: test.appspot.com
+          VITE_FIREBASE_MESSAGING_SENDER_ID: '123456789'
+          VITE_FIREBASE_APP_ID: '1:123456789:web:test'
+          VITE_FIREBASE_VAPID_KEY: test_vapid_key
+
+      # ── Upload Playwright report ─────────────────────────────────────────────
+      - name: Upload Playwright report
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: playwright-report
+          path: playwright-report/
+          retention-days: 7
+
+      # ── SonarCloud Scan ──────────────────────────────────────────────────────
+      # Reads coverage/lcov.info produced by Vitest above.
+      - name: SonarCloud Scan
+        uses: SonarSource/sonarcloud-github-action@master
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+        with:
+          args: >
+            -Dsonar.organization=${{ secrets.SONAR_ORGANIZATION }}
+            -Dsonar.projectKey=${{ secrets.SONAR_PROJECT_KEY_FRONTEND }}
+            -Dsonar.projectName="ConnectHub Frontend"
+            -Dsonar.sources=src
+            -Dsonar.exclusions=**/node_modules/**,**/dist/**,**/*.test.js,**/*.spec.js,**/playwright-report/**,**/test-results/**,**/tests/**
+            -Dsonar.javascript.lcov.reportPaths=coverage/lcov.info
+            -Dsonar.testExecutionReportPaths=
