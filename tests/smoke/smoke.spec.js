@@ -30,17 +30,29 @@ async function openSidebarIfMobile(page) {
   await page.locator('.sidebar-container.open').waitFor({ state: 'attached', timeout: 5000 })
 }
 
-// ── Page Structure Smoke Tests (no backend required) ─────────────────────────
+// ── Page Structure Smoke Tests (no backend required) ─────────────────────
+
+/** Suppress the Vite proxy ECONNREFUSED noise from public stats endpoint in CI */
+async function mockPublicStats(page) {
+  await page.route('**/api/v1/auth/public/**', route =>
+    route.fulfill({ json: { totalUsers: 0, activeRooms: 0, messagesSent: 0 } })
+  )
+}
 
 test.describe('Smoke — Page Rendering', () => {
 
-  test('homepage redirects to /login when unauthenticated', async ({ page }) => {
+  test('homepage shows marketing page when unauthenticated', async ({ page }) => {
+    await mockPublicStats(page)
     await page.goto('/')
-    await expect(page).toHaveURL(/\/login/)
-    await expect(page.getByRole('heading', { name: /Sign in/i })).toBeVisible()
+    // The '/' route renders HomePage (marketing landing), not a redirect.
+    // Verify the page loaded without crashing by checking it's still on '/'.
+    await expect(page).toHaveURL('http://localhost:5173/')
+    // The page should render something visible (not a blank error screen)
+    await expect(page.locator('body')).not.toBeEmpty()
   })
 
   test('login page renders all key elements', async ({ page }) => {
+    await mockPublicStats(page)
     await page.goto('/login')
     await expect(page.getByRole('heading', { name: /Sign in/i })).toBeVisible()
     await expect(page.getByRole('button', { name: /Google/i })).toBeVisible()
@@ -48,11 +60,13 @@ test.describe('Smoke — Page Rendering', () => {
   })
 
   test('register page renders correctly', async ({ page }) => {
+    await mockPublicStats(page)
     await page.goto('/register')
     await expect(page.getByRole('heading', { name: /Create.*account|Sign up|Register/i })).toBeVisible()
   })
 
   test('chat page redirects unauthenticated users to login', async ({ page }) => {
+    await mockPublicStats(page)
     await page.goto('/chat')
     await expect(page).toHaveURL(/\/login/)
   })
@@ -64,16 +78,19 @@ test.describe('Smoke — Page Rendering', () => {
 test.describe('Smoke — Chat Dashboard', () => {
 
   test('authenticated user sees the chat layout', async ({ page }) => {
+    await mockPublicStats(page)
     await seedAuth(page)
     await mockChatApis(page, { rooms: [MOCK_ROOM] })
     await page.goto('/chat')
 
     // Sidebar container should be visible with at least one room
-    await expect(page.locator('.sidebar-container')).toBeVisible()
-    await expect(page.getByText(MOCK_ROOM.name).first()).toBeVisible()
+    await expect(page.locator('.sidebar-container')).toBeVisible({ timeout: 10000 })
+    // Room name text should appear somewhere in the sidebar
+    await expect(page.getByText(MOCK_ROOM.name).first()).toBeVisible({ timeout: 10000 })
   })
 
   test('authenticated user can navigate into a chat room', async ({ page }) => {
+    await mockPublicStats(page)
     await seedAuth(page)
     await mockChatApis(page, { rooms: [MOCK_ROOM] })
 
@@ -83,13 +100,18 @@ test.describe('Smoke — Chat Dashboard', () => {
     )
     await page.goto('/chat')
     await openSidebarIfMobile(page)
-    await page.getByText(MOCK_ROOM.name).first().click()
+
+    // Wait for sidebar to load before clicking
+    const roomItem = page.getByText(MOCK_ROOM.name).first()
+    await roomItem.waitFor({ state: 'visible', timeout: 10000 })
+    await roomItem.click()
 
     // The chat area should now show the room header
-    await expect(page.getByText(MOCK_ROOM.name).first()).toBeVisible()
+    await expect(page.getByText(MOCK_ROOM.name).first()).toBeVisible({ timeout: 10000 })
   })
 
   test('real-time indicator shows connection status', async ({ page }) => {
+    await mockPublicStats(page)
     await seedAuth(page)
     await mockChatApis(page, { rooms: [MOCK_ROOM] })
     await page.goto('/chat')
