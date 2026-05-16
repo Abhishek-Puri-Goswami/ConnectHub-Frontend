@@ -40,6 +40,7 @@ import OAuth2CallbackPage from './components/auth/OAuth2CallbackPage'
 import SuspendedPage from './components/auth/SuspendedPage'
 import ToastContainer from './components/layout/ToastContainer'
 import BroadcastBanner from './components/common/BroadcastBanner'
+import HomePage from './components/marketing/HomePage'
 
 /*
  * WebSocketKeepAlive — keeps the WebSocket open for any authenticated page,
@@ -99,6 +100,7 @@ export default function App() {
       <BrowserRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
         <Suspense fallback={<div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100vh' }}>Loading…</div>}>
           <Routes>
+            <Route path="/" element={<PublicRoute><HomePage /></PublicRoute>} />
             <Route path="/login" element={<PublicRoute><LoginPage /></PublicRoute>} />
             <Route path="/register" element={<PublicRoute><RegisterPage /></PublicRoute>} />
             <Route path="/forgot-password" element={<PublicRoute><ForgotPasswordPage /></PublicRoute>} />
