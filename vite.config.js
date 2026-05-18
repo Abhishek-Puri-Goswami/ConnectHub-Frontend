@@ -111,10 +111,28 @@ export default defineConfig({
       reporter: ["text", "html", "lcov"],
       exclude: [
         "node_modules/**",
-        "**/*.test.js",
+        "**/*.test.{js,jsx,ts,tsx}",
         "vite.config.js",
+        "playwright.config.js",
         "tests/**",
         "src/test/**",
+        // React UI components — behaviour is covered by Playwright E2E tests
+        "src/components/**",
+        // React hook: requires renderHook from @testing-library/react (not installed)
+        "src/hooks/**",
+        // Browser-only / SDK-dependent services excluded from unit coverage.
+        // api.js relies on token-refresh machinery that needs integration testing;
+        // firebase.js and websocket.js require real browser APIs (ServiceWorker, STOMP).
+        "src/services/firebase.js",
+        "src/services/websocket.js",
+        "src/services/api.js",
+        // React theme context — no unit-testable business logic
+        "src/theme/**",
+        // App entry points — tested end-to-end by Playwright smoke suite
+        "src/App.jsx",
+        "src/main.jsx",
+        // Service worker lives in /public — not processed by Vite
+        "public/**",
       ],
     },
   },

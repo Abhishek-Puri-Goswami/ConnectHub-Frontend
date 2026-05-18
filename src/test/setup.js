@@ -24,6 +24,40 @@
  */
 
 /*
+ * localStorage / sessionStorage stub
+ *
+ * WHY: Node.js 22+ exposes a built-in `localStorage` global, but without the
+ * `--localstorage-file` CLI flag it is a broken stub whose methods (getItem,
+ * setItem, etc.) are not callable. This causes Zustand stores that read
+ * localStorage at module-initialisation time (e.g. authStore) to crash with
+ * "localStorage.getItem is not a function" during Vitest test collection.
+ *
+ * We replace the global with a proper in-memory implementation before any
+ * test module is imported. jsdom's own localStorage is also set up this way
+ * when the environment initialises, but the stores are evaluated before that
+ * happens in some worker configurations.
+ */
+const _makeStorage = () => {
+  const store = Object.create(null)
+  return {
+    getItem: (k) => (k in store ? store[k] : null),
+    setItem: (k, v) => { store[k] = String(v) },
+    removeItem: (k) => { delete store[k] },
+    clear: () => { Object.keys(store).forEach(k => delete store[k]) },
+    key: (n) => Object.keys(store)[n] ?? null,
+    get length() { return Object.keys(store).length },
+  }
+}
+
+// Only replace if the native methods are missing (Node 22 broken stub).
+if (typeof localStorage === 'undefined' || typeof localStorage.getItem !== 'function') {
+  Object.defineProperty(globalThis, 'localStorage', { value: _makeStorage(), writable: true, configurable: true })
+}
+if (typeof sessionStorage === 'undefined' || typeof sessionStorage.getItem !== 'function') {
+  Object.defineProperty(globalThis, 'sessionStorage', { value: _makeStorage(), writable: true, configurable: true })
+}
+
+/*
  * window.matchMedia mock
  *
  * WHY: jsdom does not implement matchMedia (used by CSS media query JS checks).

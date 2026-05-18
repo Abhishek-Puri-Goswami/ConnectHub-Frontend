@@ -101,6 +101,6 @@ jobs:
             -Dsonar.projectKey=${{ secrets.SONAR_PROJECT_KEY_FRONTEND }}
             -Dsonar.projectName="ConnectHub Frontend"
             -Dsonar.sources=src
-            -Dsonar.exclusions=**/node_modules/**,**/dist/**,**/*.test.js,**/*.spec.js,**/playwright-report/**,**/test-results/**,**/tests/**
+            -Dsonar.exclusions=**/node_modules/**,**/dist/**,**/*.test.js,**/*.spec.js,**/*.test.jsx,**/playwright-report/**,**/test-results/**,**/tests/**,**/src/test/**
+            -Dsonar.coverage.exclusions=**/src/components/**,**/src/hooks/**,**/src/services/firebase.js,**/src/services/websocket.js,**/src/services/api.js,**/src/theme/**,**/src/App.jsx,**/src/main.jsx,**/public/**,**/playwright.config.js
             -Dsonar.javascript.lcov.reportPaths=coverage/lcov.info
-            -Dsonar.testExecutionReportPaths=
