@@ -162,9 +162,12 @@ function getFileIcon(filename, size = 16) {
 function StatusTicks({ message, isOwn, roomMembers, userId }) {
   if (!isOwn) return null
   const status = message.deliveryStatus || 'SENT'
-  const readBy = message.readBy || []
-  const others = roomMembers.filter(m => m.userId !== userId)
-  const allRead = others.length > 0 && others.every(m => readBy.includes(m.userId))
+  // Normalize all IDs to numbers for safe comparison regardless of whether
+  // they arrive as strings (JWT claim) or numbers (JSON integer from backend).
+  const myId = Number(userId)
+  const readBy = (message.readBy || []).map(Number)
+  const others = roomMembers.filter(m => Number(m.userId) !== myId)
+  const allRead = others.length > 0 && others.every(m => readBy.includes(Number(m.userId)))
   const effective = allRead || status === 'READ' ? 'READ' : status
 
   if (effective === 'READ')

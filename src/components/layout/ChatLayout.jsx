@@ -193,6 +193,22 @@ export default function ChatLayout() {
       state.addMessage(msg.roomId, msg)
 
       /*
+       * Send a read receipt when a message arrives via the personal queue for the
+       * room the user currently has open. Normally read receipts are sent by
+       * ChatArea's onMessage (room topic subscription). But messages flushed from
+       * the pending queue on reconnect bypass the room topic — they arrive here only.
+       * Without this, those messages would never trigger a READ tick on the sender's side.
+       */
+      if (
+        msg.senderId !== user.userId &&
+        !document.hidden &&
+        msg.messageId &&
+        msg.roomId === state.activeRoomId
+      ) {
+        ws.sendReadReceipt(msg.roomId, msg.messageId)
+      }
+
+      /*
        * Keep the sidebar preview in sync whenever a message arrives on the personal
        * queue. subscribeToNotifications only fires for the offline Kafka path, so
        * online recipients who receive messages here would otherwise see a stale

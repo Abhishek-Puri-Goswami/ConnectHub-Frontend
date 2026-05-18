@@ -533,7 +533,7 @@ export default function ChatArea({ wsConnected }) {
                     key={item.key}
                     message={item.msg}
                     roomId={activeRoomId}
-                    isOwn={item.msg.senderId === user?.userId}
+                    isOwn={Number(item.msg.senderId) === Number(user?.userId)}
                     isRoomAdmin={isRoomAdmin}
                     showAvatar={item.showAvatar}
                     onReply={() => setReplyTo(item.msg)}

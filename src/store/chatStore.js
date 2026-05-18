@@ -282,15 +282,17 @@ export const useChatStore = create((set, get) => ({
     const msgs = s.messages[roomId]
     if (!msgs) return s
     const now = new Date().toISOString()
+    // Normalize to number for consistent comparison regardless of JSON vs string origin
+    const readerIdNum = Number(readerId)
     let pastTarget = false
     const updated = msgs.map(m => {
       if (pastTarget) return m
-      const readBy = m.readBy || []
+      const readBy = (m.readBy || []).map(Number)
       let result = m
-      if (!readBy.includes(readerId) && m.senderId !== readerId) {
+      if (!readBy.includes(readerIdNum) && Number(m.senderId) !== readerIdNum) {
         const readReceipts = { ...(m.readReceipts || {}) }
-        if (!readReceipts[readerId]) readReceipts[readerId] = now
-        result = { ...m, readBy: [...readBy, readerId], deliveryStatus: 'READ', readReceipts }
+        if (!readReceipts[readerIdNum]) readReceipts[readerIdNum] = now
+        result = { ...m, readBy: [...readBy, readerIdNum], deliveryStatus: 'READ', readReceipts }
       }
       if (m.messageId === upToMessageId) pastTarget = true
       return result
@@ -307,12 +309,14 @@ export const useChatStore = create((set, get) => ({
     const msgs = s.messages[roomId]
     if (!msgs) return s
     const now = new Date().toISOString()
+    // Normalize readerId to number for consistent comparisons
+    const readerIdNum = readerId != null ? Number(readerId) : null
     const updated = msgs.map(m => {
       if (m.messageId === messageId) {
-        const readBy = [...(m.readBy || [])]
-        if (readerId && !readBy.includes(readerId)) readBy.push(readerId)
+        const readBy = (m.readBy || []).map(Number)
+        if (readerIdNum != null && !readBy.includes(readerIdNum)) readBy.push(readerIdNum)
         const readReceipts = { ...(m.readReceipts || {}) }
-        if (readerId && status === 'READ' && !readReceipts[readerId]) readReceipts[readerId] = now
+        if (readerIdNum != null && status === 'READ' && !readReceipts[readerIdNum]) readReceipts[readerIdNum] = now
         return {
           ...m,
           deliveryStatus: status,
