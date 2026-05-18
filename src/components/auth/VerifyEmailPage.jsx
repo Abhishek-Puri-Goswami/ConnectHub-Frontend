@@ -1,45 +1,20 @@
 /*
  * VerifyEmailPage.jsx — Combined Email + Phone OTP Verification after Registration
  *
- * Purpose:
- *   After a user registers they land here to confirm both their email address and
- *   their phone number before being logged in. Two independent OTP sections are
- *   shown side-by-side (or stacked on mobile):
- *
- *   Email section
- *     The OTP was already sent by the backend during registration.
- *     Auto-verify fires as soon as 6 digits are entered.
- *     A 300-second expiry countdown and a 60-second resend cooldown are shown.
- *
- *   Phone section
- *     The OTP must be explicitly requested (SMS is not sent automatically on
- *     registration). A "Send code" button triggers POST /auth/phone/request-otp.
- *     After the code is sent, the 6-digit input appears with its own cooldown.
- *     Auto-verify fires on the 6th digit.
- *
- * Token handling:
- *   Email verification (POST /auth/verify-registration-otp) returns JWT tokens.
- *   We hold those tokens in state without logging in immediately. Once BOTH email
- *   and phone are verified we call setAuth() and navigate to /chat. If the user
- *   provided no phone number during registration, only the email section is shown
- *   and we navigate as soon as email is verified (backward-compatible with the
- *   LoginPage redirect which only passes { email } in state).
- *
- * State received via React Router location.state:
- *   email  — required; if absent, redirect to /login
- *   phone  — optional (full international, e.g. "+919876543210"); omit to skip
- *            the phone section entirely
- *
- * Cooldown timers:
- *   Each section has an independent cooldown key (emailCooldownKey / phoneCooldownKey).
- *   Incrementing the key restarts the corresponding useEffect-based interval from 0.
+ * Changes:
+ *  - On mount, calls GET /auth/public/verification-status?email=... to pre-populate
+ *    already-verified sections (so navigating back never shows a re-verify prompt).
+ *  - Replaced auto-navigate spinner with an explicit "Get Started" button that is
+ *    disabled until BOTH email and phone are verified (or email-only if no phone).
+ *  - Phone section shows "✓ Verified" immediately if already verified on load.
+ *  - Email section shows "✓ Verified" immediately if already verified on load.
  */
 import { useState, useEffect, useRef } from 'react'
 import { useLocation, useNavigate } from 'react-router-dom'
 import { api } from '../../services/api'
 import { useAuthStore } from '../../store/authStore'
 import {
-  ArrowLeft, Loader2, Check, X, Mail, Phone, ShieldCheck, Send,
+  ArrowLeft, Loader2, Check, X, Mail, Phone, ShieldCheck, Send, ArrowRight,
 } from 'lucide-react'
 import AuthLayout from './AuthLayout'
 import OtpInput from './OtpInput'
@@ -56,9 +31,9 @@ export default function VerifyEmailPage() {
   const navigate  = useNavigate()
   const setAuth   = useAuthStore(s => s.setAuth)
 
-  /* credentials passed from RegisterPage (or LoginPage for email-only redirects) */
-  const email = location.state?.email || ''
-  const phone = location.state?.phone || ''      // full intl format, e.g. "+919876543210"
+  /* credentials passed from RegisterPage */
+  const email    = location.state?.email || ''
+  const phone    = location.state?.phone || ''
   const hasPhone = Boolean(phone)
 
   /* Guard: if no email in state, bounce to login */
@@ -91,6 +66,22 @@ export default function VerifyEmailPage() {
   const [phoneCooldown,    setPhoneCooldown]    = useState(0)
   const [phoneCooldownKey, setPhoneCooldownKey] = useState(0)
 
+  /* ── Status check on mount ────────────────────────────────────── */
+  /*
+   * Check if email/phone are already verified (user navigated back after
+   * previously completing one or both steps). Pre-populate the verified states
+   * so they don't see a re-verify prompt for something already done.
+   */
+  useEffect(() => {
+    if (!email) return
+    api.req('GET', `/auth/public/verification-status?email=${encodeURIComponent(email)}`, null, false)
+      .then(data => {
+        if (data?.emailVerified) setEmailVerified(true)
+        if (data?.phoneVerified) setPhoneVerified(true)
+      })
+      .catch(() => { /* non-critical — proceed normally if this fails */ })
+  }, [email]) // eslint-disable-line react-hooks/exhaustive-deps
+
   /* ── Timers ───────────────────────────────────────────────────── */
 
   /* email cooldown */
@@ -120,18 +111,22 @@ export default function VerifyEmailPage() {
     return () => clearInterval(id)
   }, [phoneCooldownKey]) // eslint-disable-line react-hooks/exhaustive-deps
 
+  /* ── Derived: whether everything required is verified ────────── */
+  const allVerified = emailVerified && (!hasPhone || phoneVerified)
+
   /* ── Actions ──────────────────────────────────────────────────── */
 
   /*
-   * finishLogin — called once all required verifications are complete.
+   * finishLogin — called when user clicks "Get Started".
    * Uses the tokens captured from email verification to log the user in.
    */
-  const finishLogin = (tokens) => {
-    setAuth(tokens.accessToken, tokens.refreshToken, tokens.user)
+  const finishLogin = () => {
+    if (!pendingTokens.current) return
+    setAuth(pendingTokens.current.accessToken, pendingTokens.current.refreshToken, pendingTokens.current.user)
     navigate('/chat', { replace: true })
   }
 
-  /* verifyEmail — submits email OTP; stores tokens for later use */
+  /* verifyEmail — submits email OTP; stores tokens for later */
   const verifyEmail = async () => {
     if (emailOtp.length !== 6 || emailLoading || emailVerified) return
     setEmailError(''); setEmailLoading(true)
@@ -139,8 +134,6 @@ export default function VerifyEmailPage() {
       const data = await api.verifyOtp({ email, otp: emailOtp })
       pendingTokens.current = data
       setEmailVerified(true)
-      /* if phone was not required, log in immediately */
-      if (!hasPhone || phoneVerified) finishLogin(data)
     } catch (err) {
       setEmailError(err.message || 'Invalid code')
       setEmailOtp('')
@@ -162,7 +155,7 @@ export default function VerifyEmailPage() {
     } catch (err) { setEmailError(err.message || 'Could not resend') }
   }
 
-  /* sendPhoneCode — requests the SMS OTP for the first time (or on resend) */
+  /* sendPhoneCode — requests SMS OTP */
   const sendPhoneCode = async () => {
     if (phoneCooldown > 0 || phoneSending) return
     setPhoneError(''); setPhoneSending(true)
@@ -182,8 +175,6 @@ export default function VerifyEmailPage() {
     try {
       await api.verifyPhoneOtp(phone, phoneOtp)
       setPhoneVerified(true)
-      /* if email was already verified, log in now */
-      if (emailVerified && pendingTokens.current) finishLogin(pendingTokens.current)
     } catch (err) {
       setPhoneError(err.message || 'Invalid code')
       setPhoneOtp('')
@@ -329,25 +320,43 @@ export default function VerifyEmailPage() {
               <VerifiedBadge label="Phone verified" />
             )}
           </VerifySection>
-
-          {/* Progress indicator: shows what's still pending */}
-          {(!emailVerified || !phoneVerified) && (
-            <div style={{
-              marginTop: 20, padding: '10px 14px',
-              background: 'var(--primary-soft)', borderRadius: 'var(--r-md)',
-              fontSize: 13, color: 'var(--primary)',
-              display: 'flex', alignItems: 'center', gap: 8,
-            }}>
-              <Loader2 size={14} className={emailVerified && phoneVerified ? '' : 'spin'}/>
-              {!emailVerified && !phoneVerified
-                ? 'Verify both email and phone to continue'
-                : !emailVerified
-                  ? 'Almost there — verify your email to finish'
-                  : 'Almost there — verify your phone to finish'}
-            </div>
-          )}
         </>
       )}
+
+      {/* ── GET STARTED BUTTON ───────────────────────────────────── */}
+      {/*
+       * Replaces the old "Almost there…" spinner.
+       * Disabled until all required verifications are complete.
+       * When email-only (no phone), enabled as soon as email is verified.
+       */}
+      <div style={{ marginTop: 24 }}>
+        {!allVerified && (
+          <p style={{
+            textAlign: 'center', fontSize: 12,
+            color: 'var(--text-muted)', marginBottom: 10,
+          }}>
+            {!emailVerified && (!hasPhone || !phoneVerified)
+              ? 'Verify both email and phone to continue'
+              : !emailVerified
+                ? 'Verify your email to continue'
+                : 'Verify your phone to continue'}
+          </p>
+        )}
+        <button
+          className="btn btn-primary btn-block"
+          onClick={finishLogin}
+          disabled={!allVerified || !pendingTokens.current}
+          style={{
+            opacity: allVerified && pendingTokens.current ? 1 : 0.45,
+            cursor: allVerified && pendingTokens.current ? 'pointer' : 'not-allowed',
+            transition: 'opacity 0.3s, transform 0.15s',
+            ...(allVerified && pendingTokens.current ? { transform: 'none' } : {}),
+          }}
+        >
+          <ArrowRight size={16}/>
+          Get Started
+        </button>
+      </div>
     </AuthLayout>
   )
 }
