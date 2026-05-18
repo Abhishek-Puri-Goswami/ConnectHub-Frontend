@@ -69,27 +69,59 @@ if (isConfigured) {
 // ── Service Worker Registration ─────────────────────────────────────────────
 let swRegistration = null
 
+/**
+ * ensureServiceWorker — registers the FCM service worker and waits for it to
+ * become active before returning.
+ *
+ * Firebase's getToken() requires an *active* ServiceWorkerRegistration. If we
+ * return before the worker is activated, getToken() throws "no active Service
+ * Worker". This function waits up to 15 seconds for the worker to reach the
+ * 'activated' state before resolving.
+ */
 async function ensureServiceWorker() {
   if (!('serviceWorker' in navigator)) throw new Error('Service workers not supported')
-  if (swRegistration) return swRegistration
-  swRegistration = await navigator.serviceWorker.register('/firebase-messaging-sw.js', {
+  // If we already have an active registration, return it immediately
+  if (swRegistration?.active) return swRegistration
+
+  const reg = await navigator.serviceWorker.register('/firebase-messaging-sw.js', {
     scope: '/',
   })
-  // Forward the Firebase config so the SW can handle background messages
-  const sendConfig = (reg) => {
-    const target = reg.active || reg.waiting || reg.installing
-    target?.postMessage({ type: 'FIREBASE_CONFIG', config: firebaseConfig })
-  }
-  if (swRegistration.active) {
-    sendConfig(swRegistration)
-  } else {
-    swRegistration.addEventListener('updatefound', () => {
-      const newWorker = swRegistration.installing
-      newWorker?.addEventListener('statechange', () => {
-        if (newWorker.state === 'activated') sendConfig(swRegistration)
+
+  // If it's already active (page reload / returning visitor) we're done
+  if (!reg.active) {
+    // Wait for the installing/waiting worker to reach 'activated'
+    await new Promise((resolve, reject) => {
+      const timeout = setTimeout(
+        () => reject(new Error('Service Worker activation timed out')),
+        15000,
+      )
+      const worker = reg.installing || reg.waiting
+      if (!worker) {
+        // No installing/waiting worker but also no active — unusual; resolve anyway
+        clearTimeout(timeout)
+        resolve()
+        return
+      }
+      worker.addEventListener('statechange', function handler() {
+        if (worker.state === 'activated') {
+          clearTimeout(timeout)
+          worker.removeEventListener('statechange', handler)
+          resolve()
+        } else if (worker.state === 'redundant') {
+          clearTimeout(timeout)
+          worker.removeEventListener('statechange', handler)
+          reject(new Error('Service Worker became redundant during activation'))
+        }
       })
     })
   }
+
+  swRegistration = reg
+  // Send Firebase config via postMessage as a fallback for when firebase-sw-config.js
+  // was not available at SW evaluation time (e.g. local dev before first `npm run dev`).
+  // On production / after build this is a no-op because the SW already initialised itself
+  // from the Vite-generated config file.
+  swRegistration.active?.postMessage({ type: 'FIREBASE_CONFIG', config: firebaseConfig })
   return swRegistration
 }
 
