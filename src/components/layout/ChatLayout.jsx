@@ -259,6 +259,19 @@ export default function ChatLayout() {
         if (notif.message) {
           state.updateRoomPreview(notif.roomId, notif.message, notif.actorId)
         }
+        /*
+         * If this notification is for a room not yet in the sidebar (e.g., a new DM
+         * initiated by someone else while this user was offline, or the ROOM_CREATED
+         * notification was missed), reload the full room list so the room appears.
+         * This is the guaranteed fallback path for all room discovery edge cases.
+         */
+        if (!state.rooms.find(r => r.roomId === notif.roomId)) {
+          api.getUserRooms(user.userId)
+            .then(rooms => state.setRooms(rooms.sort((a, b) =>
+              new Date(b.lastMessageAt || 0) - new Date(a.lastMessageAt || 0)
+            )))
+            .catch(console.error)
+        }
       } else if (notif.type === 'ROOM_CREATED') {
         const state = useChatStore.getState()
         api.getUserRooms(user.userId)
