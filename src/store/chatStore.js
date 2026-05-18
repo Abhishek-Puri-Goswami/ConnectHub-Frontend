@@ -24,6 +24,7 @@
  *   sidebarOpen    — boolean for mobile sidebar visibility
  */
 import { create } from 'zustand'
+import { DELIVERY_STATUS, PRESENCE } from '../utils/constants'
 
 export const useChatStore = create((set, get) => ({
   rooms: [],
@@ -215,7 +216,7 @@ export const useChatStore = create((set, get) => ({
    */
   setBulkPresenceStatuses: (list) => set(s => {
     const next = { ...s.presenceStatuses }
-    list.forEach(p => { if (p.userId != null) next[p.userId] = p.status || 'OFFLINE' })
+    list.forEach(p => { if (p.userId != null) next[p.userId] = p.status || PRESENCE.OFFLINE })
     return { presenceStatuses: next }
   }),
 
@@ -292,7 +293,7 @@ export const useChatStore = create((set, get) => ({
       if (!readBy.includes(readerIdNum) && Number(m.senderId) !== readerIdNum) {
         const readReceipts = { ...(m.readReceipts || {}) }
         if (!readReceipts[readerIdNum]) readReceipts[readerIdNum] = now
-        result = { ...m, readBy: [...readBy, readerIdNum], deliveryStatus: 'READ', readReceipts }
+        result = { ...m, readBy: [...readBy, readerIdNum], deliveryStatus: DELIVERY_STATUS.READ, readReceipts }
       }
       if (m.messageId === upToMessageId) pastTarget = true
       return result
@@ -316,13 +317,13 @@ export const useChatStore = create((set, get) => ({
         const readBy = (m.readBy || []).map(Number)
         if (readerIdNum != null && !readBy.includes(readerIdNum)) readBy.push(readerIdNum)
         const readReceipts = { ...(m.readReceipts || {}) }
-        if (readerIdNum != null && status === 'READ' && !readReceipts[readerIdNum]) readReceipts[readerIdNum] = now
+        if (readerIdNum != null && status === DELIVERY_STATUS.READ && !readReceipts[readerIdNum]) readReceipts[readerIdNum] = now
         return {
           ...m,
           deliveryStatus: status,
           readBy,
           readReceipts,
-          ...(status === 'DELIVERED' && !m.deliveredAt ? { deliveredAt: now } : {}),
+          ...(status === DELIVERY_STATUS.DELIVERED && !m.deliveredAt ? { deliveredAt: now } : {}),
         }
       }
       return m
