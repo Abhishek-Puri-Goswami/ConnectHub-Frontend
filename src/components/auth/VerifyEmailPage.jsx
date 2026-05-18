@@ -66,18 +66,33 @@ export default function VerifyEmailPage() {
   const [phoneCooldown,    setPhoneCooldown]    = useState(0)
   const [phoneCooldownKey, setPhoneCooldownKey] = useState(0)
 
+  /*
+   * alreadyFullyVerified — true when both verifications were already done
+   * BEFORE this page session (i.e. status-check told us, but no tokens exist).
+   * In that case we show a "Sign in" path instead of "Get Started".
+   */
+  const [alreadyFullyVerified, setAlreadyFullyVerified] = useState(false)
+
   /* ── Status check on mount ────────────────────────────────────── */
   /*
    * Check if email/phone are already verified (user navigated back after
    * previously completing one or both steps). Pre-populate the verified states
    * so they don't see a re-verify prompt for something already done.
+   *
+   * If BOTH are already verified and we have no pendingTokens (pre-existing
+   * account), there is nothing to do here — flag it so the UI can prompt
+   * them to sign in instead.
    */
   useEffect(() => {
     if (!email) return
     api.req('GET', `/auth/public/verification-status?email=${encodeURIComponent(email)}`, null, false)
       .then(data => {
-        if (data?.emailVerified) setEmailVerified(true)
-        if (data?.phoneVerified) setPhoneVerified(true)
+        const ev = !!data?.emailVerified
+        const pv = !!data?.phoneVerified
+        if (ev) setEmailVerified(true)
+        if (pv) setPhoneVerified(true)
+        // Both verified from a prior session and we have no tokens → sign-in path
+        if (ev && (pv || !hasPhone)) setAlreadyFullyVerified(true)
       })
       .catch(() => { /* non-critical — proceed normally if this fails */ })
   }, [email]) // eslint-disable-line react-hooks/exhaustive-deps
@@ -135,8 +150,17 @@ export default function VerifyEmailPage() {
       pendingTokens.current = data
       setEmailVerified(true)
     } catch (err) {
-      setEmailError(err.message || 'Invalid code')
-      setEmailOtp('')
+      const msg = err.message || ''
+      // "Email already verified" is not a real error — treat it as success
+      // and show the verified state. Tokens weren't issued, so we fall back
+      // to the sign-in path (alreadyFullyVerified handles the button label).
+      if (msg.toLowerCase().includes('already verified')) {
+        setEmailVerified(true)
+        if (!hasPhone || phoneVerified) setAlreadyFullyVerified(true)
+      } else {
+        setEmailError(msg || 'Invalid code')
+        setEmailOtp('')
+      }
     } finally { setEmailLoading(false) }
   }
 
@@ -323,11 +347,13 @@ export default function VerifyEmailPage() {
         </>
       )}
 
-      {/* ── GET STARTED BUTTON ───────────────────────────────────── */}
+      {/* ── GET STARTED / SIGN IN BUTTON ─────────────────────────── */}
       {/*
-       * Replaces the old "Almost there…" spinner.
-       * Disabled until all required verifications are complete.
-       * When email-only (no phone), enabled as soon as email is verified.
+       * Three states:
+       * 1. Not all verified yet           → disabled "Get Started" + hint text
+       * 2. All verified + tokens exist    → enabled "Get Started" → /chat
+       * 3. All verified + NO tokens       → enabled "Sign In to continue" → /login
+       *    (happens when status check found both already verified before this session)
        */}
       <div style={{ marginTop: 24 }}>
         {!allVerified && (
@@ -342,19 +368,31 @@ export default function VerifyEmailPage() {
                 : 'Verify your phone to continue'}
           </p>
         )}
+
+        {allVerified && alreadyFullyVerified && (
+          <p style={{
+            textAlign: 'center', fontSize: 12,
+            color: 'var(--success, #22c55e)', marginBottom: 10, fontWeight: 500,
+          }}>
+            ✓ Account fully verified — sign in to get started
+          </p>
+        )}
+
         <button
           className="btn btn-primary btn-block"
-          onClick={finishLogin}
-          disabled={!allVerified || !pendingTokens.current}
+          onClick={allVerified && alreadyFullyVerified
+            ? () => navigate('/login', { state: { message: 'Account verified! Please sign in.' } })
+            : finishLogin
+          }
+          disabled={!allVerified}
           style={{
-            opacity: allVerified && pendingTokens.current ? 1 : 0.45,
-            cursor: allVerified && pendingTokens.current ? 'pointer' : 'not-allowed',
-            transition: 'opacity 0.3s, transform 0.15s',
-            ...(allVerified && pendingTokens.current ? { transform: 'none' } : {}),
+            opacity: allVerified ? 1 : 0.45,
+            cursor: allVerified ? 'pointer' : 'not-allowed',
+            transition: 'opacity 0.3s',
           }}
         >
           <ArrowRight size={16}/>
-          Get Started
+          {allVerified && alreadyFullyVerified ? 'Sign In to Continue' : 'Get Started'}
         </button>
       </div>
     </AuthLayout>
