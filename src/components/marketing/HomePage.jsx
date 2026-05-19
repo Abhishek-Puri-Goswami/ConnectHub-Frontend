@@ -66,21 +66,21 @@ export default function HomePage() {
   const [statsLoading, setStatsLoading] = useState(true);
 
   useEffect(() => {
-    fetch('/api/v1/auth/public/stats')
+    // Use absolute API URL so this works on Firebase Hosting (different origin from API Gateway)
+    const base = import.meta.env.VITE_API_BASE_URL || '/api/v1';
+    fetch(`${base}/auth/public/stats`)
       .then(r => r.ok ? r.json() : Promise.reject())
       .then(data => {
-        // Use real data if available and non-trivial, otherwise show platform baseline
         setStats({
-          totalUsers:   Math.max(data.totalUsers   ?? 0, 247),
-          onlineUsers:  Math.max(data.onlineUsers  ?? 0, 12),
-          activeRooms:  Math.max(data.activeRooms  ?? 0, 34),
-          messagesToday: Math.max(data.messagesToday ?? 0, 1289),
+          totalUsers:    data.totalUsers    ?? 0,
+          onlineUsers:   data.onlineUsers   ?? 0,
+          activeRooms:   data.activeRooms   ?? 0,
+          messagesToday: data.messagesToday ?? 0,
         });
         setStatsLoading(false);
       })
       .catch(() => {
-        // Platform baseline numbers shown when backend is unreachable
-        setStats({ totalUsers: 247, onlineUsers: 12, activeRooms: 34, messagesToday: 1289 });
+        setStats({ totalUsers: 0, onlineUsers: 0, activeRooms: 0, messagesToday: 0 });
         setStatsLoading(false);
       });
   }, []);
