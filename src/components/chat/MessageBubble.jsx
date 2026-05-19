@@ -346,6 +346,32 @@ const MessageBubble = memo(function MessageBubble({
                       </a>
                     </div>
                   )}
+                  {message.type === 'VIDEO' && message.mediaUrl && (
+                    <div className="mb-video-wrap">
+                      <video
+                        className="mb-video"
+                        controls
+                        preload="metadata"
+                        playsInline
+                        onClick={e => e.stopPropagation()}
+                      >
+                        <source src={message.mediaUrl} />
+                        Your browser does not support video playback.
+                      </video>
+                      <div className="mb-video-footer">
+                        <span className="mb-video-name">{decoded}</span>
+                        <a
+                          href={message.mediaUrl}
+                          download={decoded || true}
+                          className="mb-dl-btn mb-dl-btn--file"
+                          title="Download video"
+                          onClick={e => e.stopPropagation()}
+                        >
+                          <Download size={13}/>
+                        </a>
+                      </div>
+                    </div>
+                  )}
                   {message.type === 'FILE' && message.mediaUrl && (
                     <div className="mb-file-wrap">
                       <span className="mb-file-icon">{getFileIcon(decoded)}</span>

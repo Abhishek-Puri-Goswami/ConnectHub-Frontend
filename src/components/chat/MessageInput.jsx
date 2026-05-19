@@ -220,7 +220,7 @@ export default function MessageInput({ onSend, roomId }) {
     setUploading(true)
     try {
       const media = await uploadFile(file, roomId)
-      const type = file.type.startsWith('image/') ? 'IMAGE' : 'FILE'
+      const type = file.type.startsWith('image/') ? 'IMAGE' : file.type.startsWith('video/') ? 'VIDEO' : 'FILE'
       onSend(file.name, type, media.url || media.fileUrl || media.mediaUrl)
     } catch (err) {
       if (!err?.message?.includes('429') && !err?.message?.toLowerCase().includes('too many')) {
@@ -301,7 +301,7 @@ export default function MessageInput({ onSend, roomId }) {
           ref={fileRef}
           onChange={handleFileUpload}
           hidden
-          accept="image/*,.pdf,.docx,.doc,.xlsx,.zip,.txt"
+          accept="image/*,video/mp4,video/webm,video/quicktime,.pdf,.docx,.doc,.xlsx,.zip,.txt"
         />
 
         {/* Attach button — shows a spinner while uploading */}
