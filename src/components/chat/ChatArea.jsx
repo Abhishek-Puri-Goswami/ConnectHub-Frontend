@@ -43,7 +43,7 @@ import MediaGallery from './MediaGallery'
 import { enrichRoomMembers, getMemberDisplay } from '../../utils/roomMembers'
 import {
   Menu, Info, Search, ArrowDown,
-  Hash, Lock, Settings, Pin, Users, X, Loader2, Image as ImageIcon
+  Hash, Lock, Settings, Pin, Users, UserPlus, X, Loader2, Image as ImageIcon
 } from 'lucide-react'
 import { format, isToday, isYesterday, formatDistanceToNow } from 'date-fns'
 import Avatar from '../common/Avatar'
@@ -133,6 +133,7 @@ export default function ChatArea({ wsConnected }) {
   const [replyTo, setReplyTo] = useState(null)
   const [showSearch, setShowSearch] = useState(false)
   const [showRoomSettings, setShowRoomSettings] = useState(false)
+  const [roomSettingsInitialTab, setRoomSettingsInitialTab] = useState('info')
   const [showInfoPanel, setShowInfoPanel] = useState(false)
   const [pinnedMsg, setPinnedMsg] = useState(null)
   const [toast, setToast] = useState(null)
@@ -473,6 +474,17 @@ export default function ChatArea({ wsConnected }) {
             <Search size={18}/>
           </button>
 
+          {/* Manage members — group rooms only, visible to all members */}
+          {room?.type !== 'DM' && (
+            <button
+              className="ca-action-btn"
+              title="Manage members"
+              onClick={() => { setRoomSettingsInitialTab('members'); setShowRoomSettings(true) }}
+            >
+              <UserPlus size={18}/>
+            </button>
+          )}
+
           <button
             className={`ca-action-btn ${showInfoPanel ? 'active' : ''}`}
             onClick={() => setShowInfoPanel(s => !s)}
@@ -707,7 +719,7 @@ export default function ChatArea({ wsConnected }) {
         )}
       </div>
 
-      {showRoomSettings && <RoomSettingsPanel roomId={activeRoomId} onClose={() => setShowRoomSettings(false)} />}
+      {showRoomSettings && <RoomSettingsPanel roomId={activeRoomId} initialTab={roomSettingsInitialTab} onClose={() => { setShowRoomSettings(false); setRoomSettingsInitialTab('info') }} />}
       {showMediaGallery && <MediaGallery roomId={activeRoomId} onClose={() => setShowMediaGallery(false)} />}
       {infoMessage && (
         <MessageInfoPanel

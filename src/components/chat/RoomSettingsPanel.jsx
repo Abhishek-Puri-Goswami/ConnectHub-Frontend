@@ -36,7 +36,7 @@ import { enrichRoomMembers, getMemberDisplay } from '../../utils/roomMembers'
 import { X, Settings, Users, Image, Trash2, Shield, VolumeX, Volume2, UserMinus, Loader2, Search, LogOut, Copy, Link, RefreshCw, Camera, Lock, Hash, Download, Film, FileText, File, Forward, Check } from 'lucide-react'
 import './RoomSettingsPanel.css'
 
-export default function RoomSettingsPanel({ roomId, onClose }) {
+export default function RoomSettingsPanel({ roomId, onClose, initialTab = 'info' }) {
   const { user } = useAuthStore()
   const { rooms, members, setMembers, removeRoom, presenceStatuses, setBulkPresenceStatuses } = useChatStore()
   const room = rooms.find(r => r.roomId === roomId)
@@ -45,7 +45,7 @@ export default function RoomSettingsPanel({ roomId, onClose }) {
   // For DMs, resolve the other participant's display info
   const dmOther = isDM ? roomMembers.find(m => m.userId !== user?.userId) : null
 
-  const [tab, setTab] = useState('info')
+  const [tab, setTab] = useState(initialTab)
   const [name, setName] = useState(room?.name || '')
   const [description, setDescription] = useState(room?.description || '')
   const [media, setMedia] = useState([])

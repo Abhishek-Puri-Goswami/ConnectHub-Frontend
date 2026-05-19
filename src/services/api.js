@@ -627,7 +627,7 @@ class ApiService {
   }
 
   getEmailPreference() {
-    return this.req("GET", "/notifications/email-preferences");
+    return this.req("GET", "/notifications/email-preferences", null, true, true);
   }
   saveEmailPreference(enabled) {
     return this.req("PUT", "/notifications/email-preferences", { emailNotificationsEnabled: enabled });
