@@ -29,6 +29,8 @@
   display: flex;
   align-items: center;
   gap: 12px;
+  flex-shrink: 0;
+  white-space: nowrap;
 }
 .logo-icon {
   display: flex;
@@ -414,12 +416,68 @@
 /* ─── RESPONSIVE ─── */
 @media (max-width: 768px) {
   .home-header { padding: 14px 20px; }
-  .hero-section { padding: 40px 20px 40px; gap: 40px; }
+
+  .hero-section {
+    padding: 40px 20px 40px;
+    gap: 32px;
+    flex-direction: column;
+    align-items: flex-start;
+  }
+  .hero-content { max-width: 100%; }
+  .hero-visual  { min-width: 0; max-width: 100%; width: 100%; }
   .hero-title   { font-size: 34px; }
+
   .stats-section, .features-section { padding-left: 20px; padding-right: 20px; }
+  .stats-grid { grid-template-columns: repeat(2, 1fr); gap: 14px; }
+
+  .features-grid { grid-template-columns: repeat(2, 1fr); }
+
   .footer-content {
     flex-direction: column;
     gap: 12px;
     padding: 20px;
   }
+}
+
+@media (max-width: 480px) {
+  /* Header: keep logo and nav on one line, smaller sizes */
+  .home-header { padding: 12px 16px; }
+  .logo-text   { font-size: 15px; }
+  .logo-icon   { width: 28px; height: 28px; }
+  .logo-container { gap: 8px; }
+  .header-nav  { gap: 6px; }
+  /* Hide "Log In" on very small screens — Sign Up page has a login link */
+  .header-nav .btn-ghost  { display: none; }
+  .header-nav .btn-primary { padding: 7px 14px; font-size: 13px; }
+
+  /* Hero */
+  .hero-section  { padding: 28px 16px 32px; gap: 28px; }
+  .hero-title    { font-size: 28px; }
+  .hero-subtitle { font-size: 15px; }
+  .hero-actions  { flex-direction: column; gap: 10px; }
+  .hero-actions .btn-lg { width: 100%; justify-content: center; text-align: center; }
+  .badge         { font-size: 10px; }
+
+  /* Mockup: flatten the 3D tilt on small screens */
+  .mockup-window { transform: none; }
+  .mockup-window:hover { transform: none; }
+
+  /* Stats: 2 columns still fine, reduce padding */
+  .stats-section { padding: 0 16px 40px; }
+  .stats-grid    { grid-template-columns: repeat(2, 1fr); gap: 12px; }
+  .stat-card     { padding: 16px 14px 12px; }
+  .stat-card-value { font-size: 24px; }
+  .stat-card-icon  { width: 38px; height: 38px; }
+
+  /* Features: single column on very small screens */
+  .features-section { padding: 12px 16px 40px; }
+  .features-grid    { grid-template-columns: 1fr; gap: 16px; }
+  .section-header h2 { font-size: 24px; }
+
+  /* Footer */
+  .footer-content { padding: 16px; text-align: center; }
+  .footer-left    { flex-direction: column; gap: 4px; }
+
+  /* Floating shapes — hide on mobile to avoid overflow */
+  .floating-shape { display: none; }
 }
