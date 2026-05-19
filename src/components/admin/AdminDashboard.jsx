@@ -151,7 +151,11 @@ export default function AdminDashboard() {
     fetchOnlineCount()
     adminApi.getActiveRoomCount().then(v => setActiveRoomCount(typeof v === 'number' ? v : v?.count ?? null)).catch(() => {})
     adminApi.getDailyMessageCount().then(v => setDailyMessageCount(typeof v === 'number' ? v : v?.count ?? null)).catch(() => {})
-    adminApi.getTotalStorageUsed().then(v => setTotalStorageBytes(typeof v === 'number' ? v : v?.bytes ?? v?.totalBytes ?? null)).catch(() => {})
+    adminApi.getTotalStorageUsed().then(v => {
+      // media-service returns megabytes (double); convert to bytes for formatBytes()
+      const mb = typeof v === 'number' ? v : v?.storageMb ?? v?.bytes ?? null
+      setTotalStorageBytes(mb != null ? Math.round(mb * 1024 * 1024) : null)
+    }).catch(() => {})
 
     const onlineTimer = setInterval(fetchOnlineCount, 15_000)
     const usersTimer  = setInterval(fetchUsers, 60_000)
