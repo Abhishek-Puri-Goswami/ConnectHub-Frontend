@@ -142,6 +142,9 @@ export default function BillingPage() {
 
           {/* Active plan card */}
           <div className={`billing-plan-card ${isPlatinum ? 'platinum' : isProUser ? 'pro' : ''}`}>
+            <div className="billing-plan-current-label">
+              <Star size={11}/> Current Plan
+            </div>
             <div className="billing-plan-card-top">
               {/* Left: name + price stacked */}
               <div className="billing-plan-card-left">

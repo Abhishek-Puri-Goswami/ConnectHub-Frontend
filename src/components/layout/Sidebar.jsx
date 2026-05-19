@@ -31,7 +31,6 @@
  *   wsConnected (boolean) — used to render the green/grey dot on the user's own avatar
  */
 import { useState, useEffect, memo, useCallback, useMemo } from 'react'
-import { createPortal } from 'react-dom'
 import { useNavigate } from 'react-router-dom'
 import { useAuthStore } from '../../store/authStore'
 import { useChatStore } from '../../store/chatStore'
@@ -42,7 +41,7 @@ import { enrichRoomMembers } from '../../utils/roomMembers'
 import {
   MessageCircle, Search, Plus, LogOut, Settings,
   Hash, Lock, MoreHorizontal, Users, X, Zap, Shield, CreditCard,
-  Check, CheckCheck, ChevronDown,
+  Check, CheckCheck, ChevronDown, Crown, Package,
 } from 'lucide-react'
 import { formatDistanceToNowStrict, isToday, isYesterday, format } from 'date-fns'
 import CreateRoomModal from '../chat/CreateRoomModal'
@@ -77,7 +76,9 @@ export default function Sidebar({ wsConnected }) {
   const [createTab, setCreateTab] = useState('dm')
   const [showProfile, setShowProfile] = useState(false)
   const [menuOpen, setMenuOpen] = useState(false)
-  const [showProBenefits, setShowProBenefits] = useState(false)
+  const plan = subscription?.plan || (user?.subscriptionTier) || 'FREE'
+  const planLabel = plan === 'PLATINUM' ? 'Platinum' : plan === 'PREMIUM' ? 'Premium' : 'Free'
+  const PlanIcon  = plan === 'PLATINUM' ? Crown : plan === 'PREMIUM' ? Zap : Package
   const [statusPickerOpen, setStatusPickerOpen] = useState(false)
   const [dmExpanded, setDmExpanded] = useState(true)
   const [groupExpanded, setGroupExpanded] = useState(true)
@@ -326,47 +327,19 @@ export default function Sidebar({ wsConnected }) {
           </div>
         </div>
 
-        {/* Show "Upgrade to Premium" for FREE users, or a "Premium" badge for subscribers */}
-        {!hasProSubscription && (
-          <button className="sb-upgrade-btn" onClick={openUpgradeModal}>
-            <Zap size={14}/> Upgrade to Premium
-          </button>
-        )}
-        {hasProSubscription && (
-          <button className="sb-pro-badge" onClick={() => setShowProBenefits(true)} title="View Premium benefits">
-            <Zap size={12}/> ConnectHub Premium
-          </button>
-        )}
+        {/* Plan badge — shows current plan, clicking goes to /billing */}
+        <button
+          className={`sb-plan-badge sb-plan-${plan.toLowerCase()}`}
+          onClick={() => navigate('/billing')}
+          title="Manage subscription"
+        >
+          <PlanIcon size={12}/> {planLabel}
+        </button>
       </div>
 
       {showCreate && <CreateRoomModal initialTab={createTab} onClose={() => setShowCreate(false)} />}
       {showProfile && <ProfilePanel onClose={() => setShowProfile(false)} />}
       <UpgradeModal isOpen={upgradeModalOpen} onClose={closeUpgradeModal} />
-      {showProBenefits && createPortal(
-        <div className="upgrade-overlay" onClick={() => setShowProBenefits(false)}>
-          <div className="upgrade-card" onClick={e => e.stopPropagation()} style={{ maxWidth: 420 }}>
-            <button className="upgrade-close" onClick={() => setShowProBenefits(false)}><X size={18}/></button>
-            <div className="upgrade-hero">
-              <div className="upgrade-icon-wrap"><Zap size={28} className="upgrade-icon"/></div>
-              <h2 className="upgrade-title">You're on ConnectHub Premium</h2>
-              <p className="upgrade-sub">Here's what's included in your plan:</p>
-            </div>
-            <ul className="upgrade-features">
-              {[
-                '30 messages/min (5× free limit)',
-                '10 GB media storage',
-                'Unlimited group chats',
-                '30 media uploads/min',
-                'Message history forever',
-                'Priority support',
-              ].map(f => (
-                <li key={f}><Check size={14} className="upgrade-check"/>{f}</li>
-              ))}
-            </ul>
-          </div>
-        </div>,
-        document.body
-      )}
     </>
   )
 }
