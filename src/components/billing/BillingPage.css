@@ -139,19 +139,6 @@
 }
 
 /* ── Active plan card ──────────────────────────────────────── */
-.billing-plan-current-label {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  font-size: 10px;
-  font-weight: 700;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-  color: var(--primary);
-  opacity: 0.85;
-  margin-bottom: -4px;
-}
-
 .billing-plan-card {
   background: var(--surface);
   border-radius: var(--r-lg);
@@ -214,6 +201,13 @@
   font-weight: 700;
   text-transform: uppercase;
   letter-spacing: 0.05em;
+}
+
+/* "Current" badge — shown on active plan card regardless of tier */
+.billing-plan-badge.current-badge {
+  background: rgba(99, 102, 241, 0.15);
+  color: var(--primary);
+  border: 1px solid rgba(99, 102, 241, 0.3);
 }
 
 .billing-plan-badge.free {
@@ -580,6 +574,20 @@
 
 .billing-history-table tr:hover td {
   background: var(--surface-2);
+}
+
+/* Plan activation row — first row, always present */
+.billing-plan-activation-row td {
+  background: rgba(99, 102, 241, 0.04);
+}
+.billing-plan-activation-row:hover td {
+  background: rgba(99, 102, 241, 0.08) !important;
+}
+.billing-plan-activation-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-weight: 500;
 }
 
 .billing-txn-id {

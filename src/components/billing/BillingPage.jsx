@@ -142,22 +142,21 @@ export default function BillingPage() {
 
           {/* Active plan card */}
           <div className={`billing-plan-card ${isPlatinum ? 'platinum' : isProUser ? 'pro' : ''}`}>
-            <div className="billing-plan-current-label">
-              <Star size={11}/> Current Plan
-            </div>
             <div className="billing-plan-card-top">
               {/* Left: name + price stacked */}
               <div className="billing-plan-card-left">
                 <div className="billing-plan-name">
                   {isPlatinum ? <Crown size={16}/> : isProUser ? <Zap size={16}/> : <Package size={16}/>}
                   {planDisplayName}
-                  {/* Only show plan tier badge for actually paid plans */}
+                  {/* "Current" badge — always shown */}
+                  <span className="billing-plan-badge current-badge">Current</span>
+                  {/* Paid tier badge */}
                   {(isPremium || isPlatinum) && (
                     <span className={`billing-plan-badge ${isPlatinum ? 'platinum' : 'pro'}`}>
                       {isPlatinum ? 'Platinum' : 'Premium'}
                     </span>
                   )}
-                  {/* Status badge only makes sense when on a paid plan */}
+                  {/* Status badge for paid plans */}
                   {(isPremium || isPlatinum) && (
                     <span className={`billing-plan-badge ${status === 'ACTIVE' ? 'active' : status === 'CANCELLED' ? 'cancelled' : status === 'HALTED' ? 'halted' : 'pending-badge'}`}>
                       {status === 'ACTIVE' ? 'Active' : status === 'CANCELLED' ? 'Cancelled' : status === 'HALTED' ? 'Payment failed' : status}
@@ -315,13 +314,6 @@ export default function BillingPage() {
               <Loader2 size={16} className="spin"/>
               <span>Loading payment history…</span>
             </div>
-          ) : payments.length === 0 ? (
-            <div className="billing-empty-inline">
-              <Receipt size={15} style={{ opacity: 0.4 }}/>
-              <span>No transactions yet
-                {!isProUser && <> — <button onClick={openUpgradeModal} style={{ background:'none', border:'none', cursor:'pointer', color:'var(--primary)', fontWeight:600, fontSize:'inherit', padding:0 }}>upgrade</button> to start your billing history</>}
-              </span>
-            </div>
           ) : (
             <div className="billing-history-table">
               <table>
@@ -335,12 +327,34 @@ export default function BillingPage() {
                   </tr>
                 </thead>
                 <tbody>
+                  {/* Always show a plan activation row */}
+                  <tr className="billing-plan-activation-row">
+                    <td style={{ whiteSpace: 'nowrap' }}>
+                      {subscription?.startDate
+                        ? format(new Date(subscription.startDate), 'MMM d, yyyy')
+                        : format(new Date(user?.createdAt || Date.now()), 'MMM d, yyyy')}
+                    </td>
+                    <td>
+                      <span className="billing-plan-activation-label">
+                        {isPlatinum ? <Crown size={11}/> : isProUser ? <Zap size={11}/> : <Package size={11}/>}
+                        ConnectHub {planDisplayName} — Plan Activated
+                      </span>
+                    </td>
+                    <td style={{ fontWeight: 700 }}>{planPrice}{isProUser ? '/mo' : ''}</td>
+                    <td>
+                      <span className="billing-payment-status captured">Active</span>
+                    </td>
+                    <td className="billing-txn-id">
+                      {subscription?.razorpaySubscriptionId || '—'}
+                    </td>
+                  </tr>
+                  {/* Real payment transactions */}
                   {payments.map((p, i) => (
                     <tr key={p.id || i}>
                       <td style={{ whiteSpace: 'nowrap' }}>
                         {p.createdAt ? format(new Date(p.createdAt), 'MMM d, yyyy') : '—'}
                       </td>
-                      <td>{p.description || 'ConnectHub Upgrade'}</td>
+                      <td>{p.description || `ConnectHub ${planDisplayName} — Monthly Renewal`}</td>
                       <td style={{ fontWeight: 700 }}>
                         {p.currency === 'INR' ? '₹' : (p.currency || '₹')}{(p.amount || 0) / 100}
                       </td>
