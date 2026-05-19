@@ -93,7 +93,9 @@ export default function AdminDashboard() {
   const navigate = useNavigate()
   const { user } = useAuthStore()
   const { addToast } = useToastStore()
-  const viewerIsPlatformAdmin = (user?.role || '').toUpperCase() === 'PLATFORM_ADMIN'
+  const viewerRole = (user?.role || '').toUpperCase()
+  const viewerIsPlatformAdmin = viewerRole === 'PLATFORM_ADMIN'
+  const viewerIsAnyAdmin = viewerRole === 'PLATFORM_ADMIN' || viewerRole === 'ADMIN'
   const {
     users, auditLogs, auditPage, loading, error,
     searchQuery, setSearchQuery,
@@ -391,7 +393,7 @@ export default function AdminDashboard() {
           <button role="tab" className={`admin-tab ${tab === 'audit' ? 'active' : ''}`} onClick={() => switchTab('audit')}>
             <ScrollText size={13} /> Audit Logs
           </button>
-          {viewerIsPlatformAdmin && (
+          {viewerIsAnyAdmin && (
             <button role="tab" className={`admin-tab ${tab === 'rooms' ? 'active' : ''}`} onClick={() => switchTab('rooms')}>
               <Hash size={13} /> Rooms
             </button>
@@ -399,7 +401,7 @@ export default function AdminDashboard() {
           <button role="tab" className={`admin-tab ${tab === 'analytics' ? 'active' : ''}`} onClick={() => switchTab('analytics')}>
             <BarChart2 size={13} /> Analytics
           </button>
-          {viewerIsPlatformAdmin && (<>
+          {viewerIsAnyAdmin && (<>
             <button role="tab" className={`admin-tab ${tab === 'security' ? 'active' : ''}`} onClick={() => switchTab('security')}>
               <ShieldAlert size={13} /> Security
             </button>
