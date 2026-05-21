@@ -32,6 +32,7 @@
  *   after the TTL expires in Redis.
  */
 import { useEffect, useRef, useState } from 'react'
+import AnnouncementView from '../chat/AnnouncementView'
 import { useToastStore } from '../../store/toastStore'
 import { useAuthStore } from '../../store/authStore'
 import { useChatStore } from '../../store/chatStore'
@@ -52,6 +53,7 @@ export default function ChatLayout() {
   const { activeRoomId, setRooms, setOnline, setOffline, setPresenceStatus, sidebarOpen, closeSidebar } = useChatStore()
   const { fetchSubscription } = usePaymentStore()
   const [wsConnected, setWsConnected] = useState(false)
+  const [activeAnnouncement, setActiveAnnouncement] = useState(null)
   const pingRef = useRef(null)
 
   // Idle detection: auto-AWAY after 5 min, restore on activity
@@ -306,6 +308,9 @@ export default function ChatLayout() {
     }
   }, [token, user?.userId])
 
+  // Clear active announcement when a room is selected
+  useEffect(() => { if (activeRoomId) setActiveAnnouncement(null) }, [activeRoomId])
+
   return (
     <div className="chat-layout">
       {/* Decorative background blobs — purely visual, aria-hidden so screen readers skip them */}
@@ -319,13 +324,15 @@ export default function ChatLayout() {
       {sidebarOpen && <div className="sidebar-overlay fade-in" onClick={closeSidebar} />}
 
       <aside className={`sidebar-container ${sidebarOpen ? 'open' : ''}`}>
-        <Sidebar wsConnected={wsConnected} />
+        <Sidebar wsConnected={wsConnected} onAnnouncementOpen={(a) => { setActiveAnnouncement(a); useChatStore.getState().setActiveRoom(null) }} />
       </aside>
 
       <main className="chat-container">
-        {activeRoomId
-          ? <ChatArea key={activeRoomId} wsConnected={wsConnected} />
-          : <EmptyState />}
+        {activeAnnouncement
+          ? <AnnouncementView announcement={activeAnnouncement} onClose={() => setActiveAnnouncement(null)} />
+          : activeRoomId
+            ? <ChatArea key={activeRoomId} wsConnected={wsConnected} />
+            : <EmptyState />}
       </main>
 
       {/* RateLimitToast listens for "rateLimitHit" window events from any HTTP/WS source */}

@@ -337,6 +337,22 @@
   flex-shrink: 0;
 }
 
+/* ─── Announcement row ─── */
+.sb-ann-av {
+  background: var(--primary-soft) !important;
+  color: var(--primary) !important;
+  box-shadow: var(--clay-inset) !important;
+  border: 1px solid rgba(255, 142, 114, 0.3) !important;
+}
+
+/* Per-section empty state */
+.sb-section-empty {
+  padding: 8px 14px 6px;
+  font-size: 11px;
+  color: var(--text-muted);
+  font-style: italic;
+}
+
 /* ─── Empty state ─── */
 .sb-empty {
   padding: 28px 16px;

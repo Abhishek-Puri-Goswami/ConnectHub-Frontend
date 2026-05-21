@@ -41,7 +41,7 @@ import { enrichRoomMembers } from '../../utils/roomMembers'
 import {
   MessageCircle, Search, Plus, LogOut, Settings,
   Hash, Lock, MoreHorizontal, Users, X, Zap, Shield, CreditCard,
-  Check, CheckCheck, ChevronDown, Crown, Package,
+  Check, CheckCheck, ChevronDown, Crown, Package, Megaphone, Bell,
 } from 'lucide-react'
 import { formatDistanceToNowStrict, isToday, isYesterday, format } from 'date-fns'
 import CreateRoomModal from '../chat/CreateRoomModal'
@@ -59,7 +59,7 @@ const STATUS_OPTIONS = [
   { value: 'INVISIBLE', label: 'Invisible',        cls: 'invisible' },
 ]
 
-export default function Sidebar({ wsConnected }) {
+export default function Sidebar({ wsConnected, onAnnouncementOpen }) {
   const navigate = useNavigate()
   const { user, clearAuth } = useAuthStore()
   const { rooms, activeRoomId, setActiveRoom, unreadCounts, closeSidebar } = useChatStore()
@@ -82,6 +82,8 @@ export default function Sidebar({ wsConnected }) {
   const [statusPickerOpen, setStatusPickerOpen] = useState(false)
   const [dmExpanded, setDmExpanded] = useState(true)
   const [groupExpanded, setGroupExpanded] = useState(true)
+  const [announcements, setAnnouncements] = useState([])
+  const [announcementExpanded, setAnnouncementExpanded] = useState(true)
 
   const handleStatusChange = (status) => {
     setStatusPickerOpen(false)
@@ -99,6 +101,16 @@ export default function Sidebar({ wsConnected }) {
     const h = (e) => e.key === 'Escape' && setMenuOpen(false)
     window.addEventListener('keydown', h)
     return () => window.removeEventListener('keydown', h)
+  }, [])
+
+  /* Fetch platform announcements on mount */
+  useEffect(() => {
+    const base = import.meta.env.VITE_API_BASE_URL || '/api/v1'
+    const token = localStorage.getItem('accessToken')
+    fetch(`${base}/auth/announcements`, { headers: { Authorization: 'Bearer ' + token } })
+      .then(r => r.ok ? r.json() : [])
+      .then(data => setAnnouncements(Array.isArray(data) ? data : []))
+      .catch(() => {})
   }, [])
 
   /* Client-side filter — searches room name and description — memoized */
@@ -193,88 +205,91 @@ export default function Sidebar({ wsConnected }) {
           )}
         </div>
 
-        {/* Conversation list — sectioned by DM vs Group */}
+        {/* Conversation list — sectioned: Announcements, DMs, Groups */}
         <div className="sb-list">
-          {filtered.length === 0 ? (
-            <div className="sb-empty">
-              <div className="sb-empty-badge"><MessageCircle size={24}/></div>
-              <div className="sb-empty-title">
-                {search ? 'No conversations match' : 'No conversations yet'}
-              </div>
-              <div className="sb-empty-sub">
-                {search ? 'Try a different keyword' : 'Start a new message or create a group'}
-              </div>
-            </div>
-          ) : (
-            <>
-              {/* ── Direct Messages section ── */}
-              {filteredDMs.length > 0 && (
-                <>
-                  <div className="sb-section-header">
-                    <button
-                      className="sb-section-toggle"
-                      onClick={() => setDmExpanded(v => !v)}
-                      aria-expanded={dmExpanded}
-                    >
-                      <ChevronDown size={12} className={`sb-section-chevron ${dmExpanded ? '' : 'collapsed'}`}/>
-                      <MessageCircle size={12}/>
-                      <span>Direct messages</span>
-                      <span className="sb-section-count">{filteredDMs.length}</span>
-                    </button>
-                    <button
-                      className="sb-section-add"
-                      title="New direct message"
-                      onClick={() => { setCreateTab('dm'); setShowCreate(true) }}
-                    >
-                      <Plus size={12}/>
-                    </button>
-                  </div>
-                  {dmExpanded && filteredDMs.map(r => (
-                    <ConversationRow
-                      key={r.roomId}
-                      room={r}
-                      active={activeRoomId === r.roomId}
-                      unread={unreadCounts[r.roomId] || 0}
-                      onClick={() => handleRoomClick(r.roomId)}
-                    />
-                  ))}
-                </>
-              )}
+          {/* ── Announcements section (always shown) ── */}
+          <div className="sb-section-header">
+            <button className="sb-section-toggle" onClick={() => setAnnouncementExpanded(v => !v)} aria-expanded={announcementExpanded}>
+              <ChevronDown size={12} className={`sb-section-chevron ${announcementExpanded ? '' : 'collapsed'}`}/>
+              <Megaphone size={12}/>
+              <span>Announcements</span>
+              <span className="sb-section-count">{announcements.length}</span>
+            </button>
+          </div>
+          {announcementExpanded && (
+            announcements.length === 0
+              ? <div className="sb-section-empty">No announcements</div>
+              : announcements.map(a => (
+                  <AnnouncementRow key={a.id} announcement={a} onClick={() => onAnnouncementOpen?.(a)} />
+                ))
+          )}
 
-              {/* ── Groups section ── */}
-              {filteredGroups.length > 0 && (
-                <>
-                  <div className={`sb-section-header ${filteredDMs.length > 0 ? 'has-top-border' : ''}`}>
-                    <button
-                      className="sb-section-toggle"
-                      onClick={() => setGroupExpanded(v => !v)}
-                      aria-expanded={groupExpanded}
-                    >
-                      <ChevronDown size={12} className={`sb-section-chevron ${groupExpanded ? '' : 'collapsed'}`}/>
-                      <Users size={12}/>
-                      <span>Groups</span>
-                      <span className="sb-section-count">{filteredGroups.length}</span>
-                    </button>
-                    <button
-                      className="sb-section-add"
-                      title="New group"
-                      onClick={() => { setCreateTab('group'); setShowCreate(true) }}
-                    >
-                      <Plus size={12}/>
-                    </button>
-                  </div>
-                  {groupExpanded && filteredGroups.map(r => (
-                    <ConversationRow
-                      key={r.roomId}
-                      room={r}
-                      active={activeRoomId === r.roomId}
-                      unread={unreadCounts[r.roomId] || 0}
-                      onClick={() => handleRoomClick(r.roomId)}
-                    />
-                  ))}
-                </>
-              )}
-            </>
+          {/* ── Direct Messages section (always shown) ── */}
+          <div className="sb-section-header has-top-border">
+            <button
+              className="sb-section-toggle"
+              onClick={() => setDmExpanded(v => !v)}
+              aria-expanded={dmExpanded}
+            >
+              <ChevronDown size={12} className={`sb-section-chevron ${dmExpanded ? '' : 'collapsed'}`}/>
+              <MessageCircle size={12}/>
+              <span>Direct messages</span>
+              <span className="sb-section-count">{filteredDMs.length}</span>
+            </button>
+            <button
+              className="sb-section-add"
+              title="New direct message"
+              onClick={() => { setCreateTab('dm'); setShowCreate(true) }}
+            >
+              <Plus size={12}/>
+            </button>
+          </div>
+          {dmExpanded && (
+            filteredDMs.length === 0
+              ? <div className="sb-section-empty">{search ? 'No matches' : 'No direct messages yet'}</div>
+              : filteredDMs.map(r => (
+                  <ConversationRow
+                    key={r.roomId}
+                    room={r}
+                    active={activeRoomId === r.roomId}
+                    unread={unreadCounts[r.roomId] || 0}
+                    onClick={() => handleRoomClick(r.roomId)}
+                  />
+                ))
+          )}
+
+          {/* ── Groups section (always shown) ── */}
+          <div className="sb-section-header has-top-border">
+            <button
+              className="sb-section-toggle"
+              onClick={() => setGroupExpanded(v => !v)}
+              aria-expanded={groupExpanded}
+            >
+              <ChevronDown size={12} className={`sb-section-chevron ${groupExpanded ? '' : 'collapsed'}`}/>
+              <Users size={12}/>
+              <span>Groups</span>
+              <span className="sb-section-count">{filteredGroups.length}</span>
+            </button>
+            <button
+              className="sb-section-add"
+              title="New group"
+              onClick={() => { setCreateTab('group'); setShowCreate(true) }}
+            >
+              <Plus size={12}/>
+            </button>
+          </div>
+          {groupExpanded && (
+            filteredGroups.length === 0
+              ? <div className="sb-section-empty">{search ? 'No matches' : 'No groups yet'}</div>
+              : filteredGroups.map(r => (
+                  <ConversationRow
+                    key={r.roomId}
+                    room={r}
+                    active={activeRoomId === r.roomId}
+                    unread={unreadCounts[r.roomId] || 0}
+                    onClick={() => handleRoomClick(r.roomId)}
+                  />
+                ))
           )}
         </div>
 
@@ -464,9 +479,7 @@ const ConversationRow = memo(function ConversationRow({ room, active, unread, on
         {isDM ? (
           <Avatar src={dmAvatarUrl} name={name} className="sb-row-av" />
         ) : (
-          <div className="sb-row-av group">
-            {room.isPrivate ? <Lock size={15}/> : <Hash size={15}/>}
-          </div>
+          <Avatar name={name} className="sb-row-av" />
         )}
         {dotStatusClass !== null && <span className={`sb-row-dot ${dotStatusClass}`}/>}
       </div>
@@ -485,6 +498,35 @@ const ConversationRow = memo(function ConversationRow({ room, active, unread, on
     </button>
   )
 })
+
+function AnnouncementRow({ announcement, onClick }) {
+  const ts = announcement.createdAt
+    ? (() => {
+        const d = new Date(announcement.createdAt.endsWith('Z') || announcement.createdAt.includes('+') ? announcement.createdAt : announcement.createdAt + 'Z')
+        return formatRelative(d)
+      })()
+    : ''
+  return (
+    <button className="sb-row sb-ann-row" onClick={onClick}>
+      <div className="sb-row-av-wrap">
+        <div className="sb-row-av sb-ann-av">
+          <Megaphone size={14}/>
+        </div>
+      </div>
+      <div className="sb-row-body">
+        <div className="sb-row-top">
+          <span className="sb-row-name">{announcement.title || 'Platform Announcement'}</span>
+          {ts && <span className="sb-row-time">{ts}</span>}
+        </div>
+        <div className="sb-row-bottom">
+          <span className="sb-row-preview">
+            <span className="sb-row-preview-text">{announcement.content}</span>
+          </span>
+        </div>
+      </div>
+    </button>
+  )
+}
 
 /*
  * formatRelative(date) — returns a human-readable relative time string.

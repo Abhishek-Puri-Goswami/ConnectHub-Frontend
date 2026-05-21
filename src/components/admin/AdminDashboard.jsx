@@ -112,6 +112,7 @@ export default function AdminDashboard() {
     if (t === 'audit') fetchAuditLogs(0)
   }
 
+
   // Rooms
   const [rooms, setRooms] = useState([])
   const [roomsLoading, setRoomsLoading] = useState(false)
@@ -274,11 +275,11 @@ export default function AdminDashboard() {
     if (!broadcastMessage.trim()) return
     setBroadcastSending(true)
     try {
-      await adminApi.sendBroadcast(broadcastTitle.trim(), broadcastMessage.trim())
-      addToast('Broadcast sent to all connected users.', 'success')
+      await adminApi.createAnnouncement(broadcastTitle.trim(), broadcastMessage.trim())
+      addToast('Announcement sent to all users.', 'success')
       setBroadcastTitle('')
       setBroadcastMessage('')
-    } catch (e) { addToast(e.message || 'Failed to send broadcast.', 'error') }
+    } catch (e) { addToast(e.message || 'Failed to send announcement.', 'error') }
     finally { setBroadcastSending(false) }
   }
 
@@ -405,8 +406,8 @@ export default function AdminDashboard() {
             <button role="tab" className={`admin-tab ${tab === 'security' ? 'active' : ''}`} onClick={() => switchTab('security')}>
               <ShieldAlert size={13} /> Security
             </button>
-            <button role="tab" className={`admin-tab ${tab === 'broadcast' ? 'active' : ''}`} onClick={() => switchTab('broadcast')}>
-              <Megaphone size={13} /> Broadcast
+            <button role="tab" className={`admin-tab ${tab === 'announcement' ? 'active' : ''}`} onClick={() => switchTab('announcement')}>
+              <Megaphone size={13} /> Announcement
             </button>
           </>)}
         </div>
@@ -1026,15 +1027,15 @@ export default function AdminDashboard() {
         </div>
       )}
 
-      {/* ══════════════════════ BROADCAST TAB ══════════════════════ */}
-      {tab === 'broadcast' && (
+      {/* ══════════════════════ ANNOUNCEMENT TAB ══════════════════ */}
+      {tab === 'announcement' && (
         <div className="admin-tab-content">
           <div className="admin-broadcast-card">
             <div className="admin-broadcast-header">
               <span style={{ color: 'var(--accent)' }}><Megaphone size={20} /></span>
               <div>
-                <div className="admin-broadcast-title">Platform Broadcast</div>
-                <div className="admin-broadcast-sub">Message will appear as a banner to all currently connected users.</div>
+                <div className="admin-broadcast-title">Platform Announcement</div>
+                <div className="admin-broadcast-sub">Message will appear in the Announcements section for all users.</div>
               </div>
             </div>
             <div className="admin-broadcast-field">
@@ -1048,7 +1049,7 @@ export default function AdminDashboard() {
             </div>
             <button className="admin-broadcast-send" disabled={!broadcastMessage.trim() || broadcastSending} onClick={handleBroadcast}>
               {broadcastSending ? <Loader2 size={14} className="spin" /> : <Send size={14} />}
-              {broadcastSending ? 'Sending…' : 'Send Broadcast'}
+              {broadcastSending ? 'Sending…' : 'Send Announcement'}
             </button>
           </div>
         </div>

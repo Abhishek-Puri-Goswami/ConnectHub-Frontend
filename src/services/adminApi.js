@@ -153,6 +153,13 @@ class AdminApiService {
     return this.req('POST', '/ws/broadcast', { title, message })
   }
 
+  createAnnouncement(title, content) {
+    return this.req('POST', '/auth/admin/announcements', { title, content })
+  }
+  getAnnouncements() {
+    return this.req('GET', '/auth/announcements')
+  }
+
   getAnalytics() {
     return this.req('GET', '/auth/admin/analytics')
   }
