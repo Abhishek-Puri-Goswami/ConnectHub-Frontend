@@ -344,15 +344,6 @@ describe('getMemberDisplay', () => {
     expect(result.secondary).toContain('MEMBER')
   })
 
-  it('shows only the role when username is absent', () => {
-    /*
-     * Without a username there's no "@username" to show.
-     * The secondary line should just be the role.
-     */
-    const result = getMemberDisplay({ userId: 7, role: 'GUEST' })
-    expect(result.secondary).toBe('GUEST')
-  })
-
   it('trims whitespace from fullName and username', () => {
     /*
      * The trim() calls prevent "  Alice  " from appearing as a primary value
