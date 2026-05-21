@@ -10,7 +10,7 @@ import { adminApi } from '../../services/adminApi'
 import {
   Shield, Users, Search, ArrowLeft, Ban, CheckCircle, Trash2,
   ScrollText, Loader2, AlertCircle, RefreshCw, ChevronLeft, ChevronRight,
-  UserX, UserCheck, Activity, ArrowUp, ArrowDown, ArrowUpDown, Wifi, Crown, UserCog,
+  UserX, UserCheck, UserMinus, Activity, ArrowUp, ArrowDown, ArrowUpDown, Wifi, Crown, UserCog,
   Megaphone, Send, Hash, Lock, MessageSquare, HardDrive, TrendingUp, TrendingDown,
   Minus, Circle, ShieldAlert, Clock, BarChart2, LineChart as LineChartIcon, Zap
 } from 'lucide-react'
@@ -414,7 +414,7 @@ export default function AdminDashboard() {
           <div className="admin-search-bar">
             <Search size={14} />
             <input
-              placeholder="Search name, email, or username…"
+              placeholder="Search name, email, phone or username…"
               value={searchQuery}
               onChange={e => setSearchQuery(e.target.value)}
             />
@@ -480,7 +480,12 @@ export default function AdminDashboard() {
                         <tr key={uid}>
                           <td>
                             <div className="admin-user-cell">
-                              <div className="admin-user-av">{(u.fullName || u.username || '?')[0].toUpperCase()}</div>
+                              <div className="admin-user-av">
+                                {u.avatarUrl
+                                  ? <img src={u.avatarUrl} alt={u.username} className="admin-user-av-img" />
+                                  : (u.fullName || u.username || '?')[0].toUpperCase()
+                                }
+                              </div>
                               <div className="admin-user-name">{u.fullName || u.username}</div>
                             </div>
                           </td>
@@ -524,17 +529,17 @@ export default function AdminDashboard() {
                                 )}
                                 {viewerIsPlatformAdmin && (
                                   !isAdmin ? (
-                                    <button className="admin-act-btn icon-btn" title="Promote to Admin" onClick={() => setConfirmAction({ type: 'promote', userId: uid, name: u.username })}>
-                                      <UserCog size={12} />
+                                    <button className="admin-act-btn" onClick={() => setConfirmAction({ type: 'promote', userId: uid, name: u.username })}>
+                                      <UserCheck size={11} /> Promote
                                     </button>
                                   ) : (
-                                    <button className="admin-act-btn icon-btn muted" title="Demote to User" onClick={() => setConfirmAction({ type: 'demote', userId: uid, name: u.username })}>
-                                      <UserCog size={12} />
+                                    <button className="admin-act-btn muted" onClick={() => setConfirmAction({ type: 'demote', userId: uid, name: u.username })}>
+                                      <UserMinus size={11} /> Demote
                                     </button>
                                   )
                                 )}
-                                <button className="admin-act-btn danger icon-btn" onClick={() => setConfirmAction({ type: 'delete', userId: uid, name: u.username })}>
-                                  <Trash2 size={12} />
+                                <button className="admin-act-btn danger" onClick={() => setConfirmAction({ type: 'delete', userId: uid, name: u.username })}>
+                                  <Trash2 size={11} /> Delete
                                 </button>
                               </div>
                             )}
@@ -927,7 +932,12 @@ export default function AdminDashboard() {
                     const uid = u.userId || u.id
                     return (
                       <div key={uid} className="sc-row">
-                        <div className="admin-user-av sc-av">{(u.fullName || u.username || '?')[0].toUpperCase()}</div>
+                        <div className="admin-user-av sc-av">
+                          {u.avatarUrl
+                            ? <img src={u.avatarUrl} alt={u.username} className="admin-user-av-img" />
+                            : (u.fullName || u.username || '?')[0].toUpperCase()
+                          }
+                        </div>
                         <div className="sc-row-info">
                           <span className="sc-row-name">{u.username}</span>
                           <span className="sc-row-email">{u.email}</span>

@@ -52,6 +52,28 @@
   align-items: center;
 }
 
+/* Fix: theme popover is clipped by overflow-x:hidden on .home-container.
+   Use fixed positioning so it escapes all overflow/stacking-context constraints. */
+.home-header .tp-pop {
+  position: fixed;
+  top: 70px;
+  right: 40px;
+}
+@media (max-width: 768px) {
+  .home-header .tp-pop {
+    right: 16px;
+  }
+}
+@media (max-width: 480px) {
+  .home-header .tp-pop {
+    position: fixed;
+    top: auto;
+    bottom: 80px;
+    right: 12px;
+    left: 12px;
+  }
+}
+
 /* Fix: ensure btn-ghost text is always visible on hover */
 .home-header .btn-ghost { color: var(--text-soft); }
 .home-header .btn-ghost:hover { color: var(--text); background: var(--surface-hover); }
