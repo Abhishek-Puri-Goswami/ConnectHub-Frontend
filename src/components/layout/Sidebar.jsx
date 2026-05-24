@@ -40,8 +40,8 @@ import { api } from '../../services/api'
 import { enrichRoomMembers } from '../../utils/roomMembers'
 import {
   MessageCircle, Search, Plus, LogOut, Settings,
-  Hash, Lock, MoreHorizontal, Users, X, Zap, Shield, CreditCard,
-  Check, CheckCheck, ChevronDown, Crown, Package, Megaphone, Bell,
+  MoreHorizontal, Users, X, Zap, Shield, CreditCard,
+  Check, CheckCheck, ChevronDown, Crown, Package, Megaphone,
 } from 'lucide-react'
 import { formatDistanceToNowStrict, isToday, isYesterday, format } from 'date-fns'
 import CreateRoomModal from '../chat/CreateRoomModal'
@@ -490,6 +490,9 @@ const ConversationRow = memo(function ConversationRow({ room, active, unread, on
         </div>
         <div className="sb-row-bottom">
           <span className="sb-row-preview">
+            {isOwnLastMsg && (
+              <SidebarTick status={lastMsg.status} readBy={lastMsg.readBy} roomMembers={roomMembers} userId={user?.userId} />
+            )}
             <span className="sb-row-preview-text">{preview}</span>
           </span>
           {unread > 0 && <span className="sb-row-badge">{unread > 99 ? '99+' : unread}</span>}
