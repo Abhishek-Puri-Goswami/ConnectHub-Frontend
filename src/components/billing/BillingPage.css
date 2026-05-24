@@ -568,11 +568,11 @@
 .billing-history-table tr:last-child td { border-bottom: none; }
 .billing-history-table tr:hover td { background: var(--surface-2); }
 
-/* Plan activation row — tint matches the tier */
-.billing-plan-activation-row.premium td        { background: rgba(109,40,217,0.05); }
-.billing-plan-activation-row.premium:hover td  { background: rgba(109,40,217,0.10) !important; }
-.billing-plan-activation-row.platinum td       { background: rgba(217,119,6,0.05); }
-.billing-plan-activation-row.platinum:hover td { background: rgba(217,119,6,0.10) !important; }
+/* Plan activation row — tint matches the tier (uses per-theme border token at low opacity) */
+.billing-plan-activation-row.premium td        { background: color-mix(in srgb, var(--plan-premium-border) 30%, transparent); }
+.billing-plan-activation-row.premium:hover td  { background: color-mix(in srgb, var(--plan-premium-border) 55%, transparent) !important; }
+.billing-plan-activation-row.platinum td       { background: color-mix(in srgb, var(--plan-platinum-border) 28%, transparent); }
+.billing-plan-activation-row.platinum:hover td { background: color-mix(in srgb, var(--plan-platinum-border) 52%, transparent) !important; }
 
 /* Description plan pill — same visual language as the sidebar plan badge */
 @keyframes billing-shimmer {
@@ -594,16 +594,16 @@
   overflow: hidden;
 }
 .billing-desc-plan.premium {
-  background: linear-gradient(135deg, rgba(109,40,217,0.28), rgba(167,70,245,0.18));
-  color: #C4B5FD;
-  border-color: rgba(139,92,246,0.45);
-  box-shadow: inset 0 1px 0 rgba(196,181,253,0.12);
+  background: var(--plan-premium-bg);
+  color: var(--plan-premium-text);
+  border-color: var(--plan-premium-border);
+  box-shadow: var(--plan-premium-shadow);
 }
 .billing-desc-plan.platinum {
-  background: linear-gradient(135deg, rgba(180,83,9,0.32), rgba(245,158,11,0.22), rgba(251,191,36,0.16));
-  color: #FCD34D;
-  border-color: rgba(245,158,11,0.50);
-  box-shadow: inset 0 1px 0 rgba(252,211,77,0.15);
+  background: var(--plan-platinum-bg);
+  color: var(--plan-platinum-text);
+  border-color: var(--plan-platinum-border);
+  box-shadow: var(--plan-platinum-shadow);
 }
 .billing-desc-plan.platinum::before {
   content: '';
@@ -611,7 +611,7 @@
   top: 0; left: 0;
   width: 40%;
   height: 100%;
-  background: linear-gradient(90deg, transparent, rgba(252,211,77,0.30), transparent);
+  background: linear-gradient(90deg, transparent, var(--plan-platinum-shimmer), transparent);
   animation: billing-shimmer 3.2s ease-in-out infinite;
   pointer-events: none;
 }

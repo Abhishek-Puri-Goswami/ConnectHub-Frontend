@@ -92,6 +92,30 @@
 
   --ease: cubic-bezier(0.4, 0, 0.2, 1);
   --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
+
+  /* ── Plan badge tokens (light / default) ── */
+  --plan-free-bg:              rgba(45,36,56,0.06);
+  --plan-free-text:            #8B7F9E;
+  --plan-free-border:          rgba(45,36,56,0.13);
+  --plan-free-hover-bg:        rgba(45,36,56,0.11);
+  --plan-free-hover-text:      #6B5F7E;
+
+  --plan-premium-bg:           #EDE9FE;
+  --plan-premium-text:         #5B21B6;
+  --plan-premium-border:       rgba(124,58,237,0.35);
+  --plan-premium-shadow:       inset 0 1px 0 rgba(196,181,253,0.30);
+  --plan-premium-hover-bg:     #DDD6FE;
+  --plan-premium-hover-border: rgba(124,58,237,0.55);
+  --plan-premium-hover-shadow: 0 3px 12px rgba(124,58,237,0.18);
+
+  --plan-platinum-bg:          #FEF3C7;
+  --plan-platinum-text:        #92400E;
+  --plan-platinum-border:      rgba(217,119,6,0.40);
+  --plan-platinum-shadow:      inset 0 1px 0 rgba(252,211,77,0.30);
+  --plan-platinum-shimmer:     rgba(217,119,6,0.22);
+  --plan-platinum-hover-bg:    #FDE68A;
+  --plan-platinum-hover-border:rgba(217,119,6,0.60);
+  --plan-platinum-hover-shadow:0 3px 12px rgba(217,119,6,0.18);
 }
 
 /* ───── OCEAN THEME (light) ───── */
@@ -158,6 +182,30 @@
   --clay-button-shadow:
     0 6px 14px rgba(14, 165, 233, 0.35),
     inset 0 1px 0 rgba(255, 255, 255, 0.35);
+
+  /* ── Plan badge tokens (ocean) ── */
+  --plan-free-bg:              rgba(15,23,42,0.06);
+  --plan-free-text:            #64748B;
+  --plan-free-border:          rgba(15,23,42,0.12);
+  --plan-free-hover-bg:        rgba(15,23,42,0.10);
+  --plan-free-hover-text:      #475569;
+
+  --plan-premium-bg:           #EEF2FF;
+  --plan-premium-text:         #3730A3;
+  --plan-premium-border:       rgba(79,70,229,0.35);
+  --plan-premium-shadow:       inset 0 1px 0 rgba(165,180,252,0.30);
+  --plan-premium-hover-bg:     #E0E7FF;
+  --plan-premium-hover-border: rgba(79,70,229,0.55);
+  --plan-premium-hover-shadow: 0 3px 12px rgba(79,70,229,0.18);
+
+  --plan-platinum-bg:          #FEF9C3;
+  --plan-platinum-text:        #78350F;
+  --plan-platinum-border:      rgba(202,138,4,0.38);
+  --plan-platinum-shadow:      inset 0 1px 0 rgba(250,204,21,0.28);
+  --plan-platinum-shimmer:     rgba(202,138,4,0.24);
+  --plan-platinum-hover-bg:    #FEF08A;
+  --plan-platinum-hover-border:rgba(202,138,4,0.58);
+  --plan-platinum-hover-shadow:0 3px 12px rgba(202,138,4,0.18);
 }
 
 /* ───── FOREST THEME (light) ───── */
@@ -224,6 +272,30 @@
   --clay-button-shadow:
     0 6px 14px rgba(22, 163, 74, 0.35),
     inset 0 1px 0 rgba(255, 255, 255, 0.35);
+
+  /* ── Plan badge tokens (forest) ── */
+  --plan-free-bg:              rgba(5,46,22,0.07);
+  --plan-free-text:            #4B7A5E;
+  --plan-free-border:          rgba(5,46,22,0.13);
+  --plan-free-hover-bg:        rgba(5,46,22,0.12);
+  --plan-free-hover-text:      #14532D;
+
+  --plan-premium-bg:           #F3E8FF;
+  --plan-premium-text:         #5B21B6;
+  --plan-premium-border:       rgba(124,58,237,0.30);
+  --plan-premium-shadow:       inset 0 1px 0 rgba(196,181,253,0.28);
+  --plan-premium-hover-bg:     #EDE9FE;
+  --plan-premium-hover-border: rgba(124,58,237,0.50);
+  --plan-premium-hover-shadow: 0 3px 12px rgba(124,58,237,0.16);
+
+  --plan-platinum-bg:          #FEF3C7;
+  --plan-platinum-text:        #78350F;
+  --plan-platinum-border:      rgba(180,83,9,0.36);
+  --plan-platinum-shadow:      inset 0 1px 0 rgba(252,211,77,0.26);
+  --plan-platinum-shimmer:     rgba(180,83,9,0.24);
+  --plan-platinum-hover-bg:    #FDE68A;
+  --plan-platinum-hover-border:rgba(180,83,9,0.56);
+  --plan-platinum-hover-shadow:0 3px 12px rgba(180,83,9,0.16);
 }
 
 /* ───── ROSE THEME (light) ───── */
@@ -290,6 +362,30 @@
   --clay-button-shadow:
     0 6px 14px rgba(236, 72, 153, 0.35),
     inset 0 1px 0 rgba(255, 255, 255, 0.35);
+
+  /* ── Plan badge tokens (rose) ── */
+  --plan-free-bg:              rgba(77,5,40,0.06);
+  --plan-free-text:            #9D6B93;
+  --plan-free-border:          rgba(77,5,40,0.12);
+  --plan-free-hover-bg:        rgba(77,5,40,0.11);
+  --plan-free-hover-text:      #6B2163;
+
+  --plan-premium-bg:           #F3E8FF;
+  --plan-premium-text:         #6D28D9;
+  --plan-premium-border:       rgba(124,58,237,0.30);
+  --plan-premium-shadow:       inset 0 1px 0 rgba(196,181,253,0.28);
+  --plan-premium-hover-bg:     #EDE9FE;
+  --plan-premium-hover-border: rgba(124,58,237,0.50);
+  --plan-premium-hover-shadow: 0 3px 12px rgba(124,58,237,0.16);
+
+  --plan-platinum-bg:          #FEF3C7;
+  --plan-platinum-text:        #78350F;
+  --plan-platinum-border:      rgba(180,83,9,0.36);
+  --plan-platinum-shadow:      inset 0 1px 0 rgba(252,211,77,0.26);
+  --plan-platinum-shimmer:     rgba(245,158,11,0.26);
+  --plan-platinum-hover-bg:    #FDE68A;
+  --plan-platinum-hover-border:rgba(180,83,9,0.56);
+  --plan-platinum-hover-shadow:0 3px 12px rgba(180,83,9,0.16);
 }
 
 /* ───── MIDNIGHT THEME (dark) ───── */
@@ -356,6 +452,30 @@
   --clay-button-shadow:
     0 6px 14px rgba(99, 102, 241, 0.35),
     inset 0 1px 0 rgba(255, 255, 255, 0.15);
+
+  /* ── Plan badge tokens (midnight) ── */
+  --plan-free-bg:              rgba(255,255,255,0.05);
+  --plan-free-text:            #64748B;
+  --plan-free-border:          rgba(255,255,255,0.09);
+  --plan-free-hover-bg:        rgba(255,255,255,0.09);
+  --plan-free-hover-text:      #94A3B8;
+
+  --plan-premium-bg:           linear-gradient(135deg, rgba(79,70,229,0.26), rgba(99,102,241,0.16));
+  --plan-premium-text:         #A5B4FC;
+  --plan-premium-border:       rgba(99,102,241,0.42);
+  --plan-premium-shadow:       inset 0 1px 0 rgba(165,180,252,0.14);
+  --plan-premium-hover-bg:     linear-gradient(135deg, rgba(79,70,229,0.40), rgba(99,102,241,0.28));
+  --plan-premium-hover-border: rgba(99,102,241,0.64);
+  --plan-premium-hover-shadow: 0 3px 14px rgba(99,102,241,0.30);
+
+  --plan-platinum-bg:          linear-gradient(135deg, rgba(180,83,9,0.30), rgba(245,158,11,0.20), rgba(251,191,36,0.14));
+  --plan-platinum-text:        #FDE68A;
+  --plan-platinum-border:      rgba(245,158,11,0.48);
+  --plan-platinum-shadow:      inset 0 1px 0 rgba(252,211,77,0.14);
+  --plan-platinum-shimmer:     rgba(252,211,77,0.30);
+  --plan-platinum-hover-bg:    linear-gradient(135deg, rgba(180,83,9,0.44), rgba(245,158,11,0.32), rgba(251,191,36,0.24));
+  --plan-platinum-hover-border:rgba(245,158,11,0.68);
+  --plan-platinum-hover-shadow:0 3px 14px rgba(245,158,11,0.30);
 }
 
 /* ───── DARK THEME ───── */
@@ -422,6 +542,30 @@
   --clay-button-shadow:
     0 6px 14px rgba(255, 159, 135, 0.3),
     inset 0 1px 0 rgba(255, 255, 255, 0.15);
+
+  /* ── Plan badge tokens (dark) ── */
+  --plan-free-bg:              rgba(255,255,255,0.05);
+  --plan-free-text:            #8B7F9E;
+  --plan-free-border:          rgba(255,255,255,0.09);
+  --plan-free-hover-bg:        rgba(255,255,255,0.09);
+  --plan-free-hover-text:      #C9BEDC;
+
+  --plan-premium-bg:           linear-gradient(135deg, rgba(109,40,217,0.28), rgba(167,70,245,0.18));
+  --plan-premium-text:         #C4B5FD;
+  --plan-premium-border:       rgba(139,92,246,0.44);
+  --plan-premium-shadow:       inset 0 1px 0 rgba(196,181,253,0.14);
+  --plan-premium-hover-bg:     linear-gradient(135deg, rgba(109,40,217,0.42), rgba(167,70,245,0.30));
+  --plan-premium-hover-border: rgba(139,92,246,0.66);
+  --plan-premium-hover-shadow: 0 3px 14px rgba(139,92,246,0.28);
+
+  --plan-platinum-bg:          linear-gradient(135deg, rgba(180,83,9,0.32), rgba(245,158,11,0.22), rgba(251,191,36,0.16));
+  --plan-platinum-text:        #FCD34D;
+  --plan-platinum-border:      rgba(245,158,11,0.50);
+  --plan-platinum-shadow:      inset 0 1px 0 rgba(252,211,77,0.16);
+  --plan-platinum-shimmer:     rgba(252,211,77,0.28);
+  --plan-platinum-hover-bg:    linear-gradient(135deg, rgba(180,83,9,0.46), rgba(245,158,11,0.34), rgba(251,191,36,0.26));
+  --plan-platinum-hover-border:rgba(245,158,11,0.70);
+  --plan-platinum-hover-shadow:0 3px 14px rgba(245,158,11,0.28);
 }
 
 /* ───── RESET ───── */
