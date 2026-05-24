@@ -177,9 +177,20 @@ export const usePaymentStore = create((set, get) => ({
           handler: async function (response) {
             set({ loading: false });
             try {
+              // Verify payment server-side and activate plan immediately.
+              // This is reliable regardless of webhook delivery.
+              await paymentApi.verifyPayment({
+                razorpay_payment_id: response.razorpay_payment_id,
+                razorpay_order_id:   response.razorpay_order_id,
+                razorpay_signature:  response.razorpay_signature,
+              });
+            } catch (verifyErr) {
+              console.error("Payment verify failed:", verifyErr);
+            }
+            try {
               await get().refreshAuthAfterPayment();
             } catch {
-              /* webhook may lag; user can refresh page */
+              /* non-fatal — UI will still show correct plan from fetchSubscription */
             }
             await get().fetchSubscription();
             resolve(response);

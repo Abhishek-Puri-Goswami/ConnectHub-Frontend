@@ -93,6 +93,20 @@ class PaymentApiService {
   getPaymentHistory() {
     return this.req("GET", "/payments/subscription/payments");
   }
+
+  /*
+   * verifyPayment({ razorpay_payment_id, razorpay_order_id, razorpay_signature })
+   * Called immediately after the Razorpay checkout handler fires on the frontend.
+   * The backend cryptographically verifies the Razorpay signature and activates the plan,
+   * making subscription activation independent of webhook delivery.
+   */
+  verifyPayment({ razorpay_payment_id, razorpay_order_id, razorpay_signature }) {
+    return this.req("POST", "/payments/subscription/verify", {
+      razorpay_payment_id,
+      razorpay_order_id,
+      razorpay_signature,
+    });
+  }
 }
 
 export const paymentApi = new PaymentApiService();
