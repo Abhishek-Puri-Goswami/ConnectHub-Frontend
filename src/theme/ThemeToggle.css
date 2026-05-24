@@ -64,16 +64,14 @@
 }
 
 /* ─── Popover ─────────────────────────────────────────────────────────── */
+/* position/top/right/z-index are set via inline styles by the React portal — */
+/* only visual styling lives here so it works regardless of render location.  */
 .tp-pop {
-  position: absolute;
-  top: calc(100% + 6px);
-  right: 0;
   background: var(--surface);
   border: 1px solid var(--border);
   border-radius: var(--r-lg);
   box-shadow: var(--clay-shadow-lg);
   padding: 14px;
-  z-index: 300;
   min-width: 210px;
 }
 
@@ -147,17 +145,12 @@
   color: var(--primary);
 }
 
-/* On mobile: show the popover centered instead of right-anchored to avoid off-screen */
+/* On small screens ensure the portal popover doesn't overflow the viewport edge */
 @media (max-width: 480px) {
   .tp-pop {
-    position: fixed;
-    top: auto;
-    bottom: 80px;
-    right: 12px;
-    left: 12px;
     min-width: unset;
-    border-radius: var(--r-lg);
-    z-index: 400;
+    width: calc(100vw - 24px);
+    max-width: 280px;
   }
   .tp-grid { grid-template-columns: repeat(3, 1fr); }
 }
