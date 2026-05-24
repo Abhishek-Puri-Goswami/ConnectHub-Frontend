@@ -90,11 +90,13 @@ jobs:
 
       # ── SonarCloud Scan ──────────────────────────────────────────────────────
       # Reads coverage/lcov.info produced by Vitest above.
+      # Uses sonarqube-scan-action (sonarcloud-github-action is deprecated).
       - name: SonarCloud Scan
-        uses: SonarSource/sonarcloud-github-action@master
+        uses: SonarSource/sonarqube-scan-action@v5
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+          SONAR_HOST_URL: https://sonarcloud.io
         with:
           args: >
             -Dsonar.organization=${{ secrets.SONAR_ORGANIZATION }}
