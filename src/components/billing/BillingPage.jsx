@@ -348,16 +348,16 @@ export default function BillingPage() {
               <tbody>
                 {/* Paid plan activation row — only for PREMIUM / PLATINUM users */}
                 {isProUser && (
-                  <tr className="billing-plan-activation-row">
+                  <tr className={`billing-plan-activation-row ${isPlatinum ? 'platinum' : 'premium'}`}>
                     <td>
                       {subscription?.startDate
                         ? format(new Date(subscription.startDate), 'MMM d, yyyy')
                         : '—'}
                     </td>
                     <td>
-                      <span className="billing-plan-activation-label">
+                      <span className={`billing-desc-plan ${isPlatinum ? 'platinum' : 'premium'}`}>
                         {isPlatinum ? <Crown size={11}/> : <Zap size={11}/>}
-                        {planDisplayName} — Activated
+                        {planDisplayName}
                       </span>
                     </td>
                     <td><span className="billing-amount-cell">{planPrice}/mo</span></td>

@@ -568,15 +568,52 @@
 .billing-history-table tr:last-child td { border-bottom: none; }
 .billing-history-table tr:hover td { background: var(--surface-2); }
 
-/* Plan activation row */
-.billing-plan-activation-row td { background: rgba(99, 102, 241, 0.04); }
-.billing-plan-activation-row:hover td { background: rgba(99, 102, 241, 0.08) !important; }
+/* Plan activation row — tint matches the tier */
+.billing-plan-activation-row.premium td        { background: rgba(109,40,217,0.05); }
+.billing-plan-activation-row.premium:hover td  { background: rgba(109,40,217,0.10) !important; }
+.billing-plan-activation-row.platinum td       { background: rgba(217,119,6,0.05); }
+.billing-plan-activation-row.platinum:hover td { background: rgba(217,119,6,0.10) !important; }
 
-.billing-plan-activation-label {
+/* Description plan pill — same visual language as the sidebar plan badge */
+@keyframes billing-shimmer {
+  0%   { transform: translateX(-100%) skewX(-15deg); }
+  100% { transform: translateX(250%) skewX(-15deg); }
+}
+.billing-desc-plan {
   display: inline-flex;
   align-items: center;
   gap: 5px;
-  font-weight: 500;
+  padding: 3px 10px;
+  border-radius: 20px;
+  font-size: 0.7rem;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  border: 1px solid;
+  position: relative;
+  overflow: hidden;
+}
+.billing-desc-plan.premium {
+  background: linear-gradient(135deg, rgba(109,40,217,0.28), rgba(167,70,245,0.18));
+  color: #C4B5FD;
+  border-color: rgba(139,92,246,0.45);
+  box-shadow: inset 0 1px 0 rgba(196,181,253,0.12);
+}
+.billing-desc-plan.platinum {
+  background: linear-gradient(135deg, rgba(180,83,9,0.32), rgba(245,158,11,0.22), rgba(251,191,36,0.16));
+  color: #FCD34D;
+  border-color: rgba(245,158,11,0.50);
+  box-shadow: inset 0 1px 0 rgba(252,211,77,0.15);
+}
+.billing-desc-plan.platinum::before {
+  content: '';
+  position: absolute;
+  top: 0; left: 0;
+  width: 40%;
+  height: 100%;
+  background: linear-gradient(90deg, transparent, rgba(252,211,77,0.30), transparent);
+  animation: billing-shimmer 3.2s ease-in-out infinite;
+  pointer-events: none;
 }
 
 .billing-amount-cell {
