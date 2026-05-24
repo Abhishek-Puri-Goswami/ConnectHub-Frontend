@@ -121,16 +121,25 @@ export default function UpgradeModal({ isOpen, onClose, message }) {
 
   // Already-subscribed view (but not during success animation)
   if (hasSubscription && step !== 'success') {
-    const planName = subscription?.plan === 'PLATINUM' ? 'Platinum' : 'Premium'
+    // PLATFORM_ADMIN always has Platinum; ADMIN always has Premium;
+    // regular users show whatever plan the subscription record says.
+    const effectivePlan = userRole === 'PLATFORM_ADMIN'
+      ? 'PLATINUM'
+      : (userRole === 'ADMIN' ? 'PREMIUM' : (subscription?.plan || 'PREMIUM'))
+    const planName = effectivePlan === 'PLATINUM' ? 'Platinum' : 'Premium'
     return createPortal(
       <div className="upgrade-overlay" onClick={onClose}>
         <div role="dialog" className="upgrade-card" onClick={e => e.stopPropagation()}>
           <button className="upgrade-close" onClick={onClose}><X size={18}/></button>
-          <div className={`upgrade-pro-badge ${subscription?.plan === 'PLATINUM' ? 'platinum' : ''}`}>
-            {subscription?.plan === 'PLATINUM' ? <Crown size={20}/> : <Zap size={20}/>} {planName}
+          <div className={`upgrade-pro-badge ${effectivePlan === 'PLATINUM' ? 'platinum' : ''}`}>
+            {effectivePlan === 'PLATINUM' ? <Crown size={20}/> : <Zap size={20}/>} {planName}
           </div>
           <h2 className="upgrade-title">You're on {planName}! 🎉</h2>
-          <p className="upgrade-sub">Enjoy higher limits, expanded storage, and more groups.</p>
+          <p className="upgrade-sub">
+            {userRole === 'PLATFORM_ADMIN'
+              ? 'Platform Admins have Platinum access included — no payment needed.'
+              : 'Enjoy higher limits, expanded storage, and more groups.'}
+          </p>
         </div>
       </div>,
       document.body

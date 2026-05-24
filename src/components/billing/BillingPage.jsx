@@ -96,10 +96,19 @@ export default function BillingPage() {
   }, [])
 
   const isProUser    = isPro()
-  // Normalize legacy "PRO" plan name (old backend) to "PREMIUM" for consistent display
-  const rawPlan      = subscription?.plan || 'FREE'
-  const plan         = rawPlan === 'PRO' ? 'PREMIUM' : rawPlan
-  const status       = (subscription?.status || 'ACTIVE').toUpperCase()
+  const userRole     = (user?.role || '').toUpperCase()
+
+  // PLATFORM_ADMIN always has complimentary Platinum; ADMIN always has Premium.
+  // For regular users: read from subscription record (normalize legacy "PRO" → "PREMIUM").
+  const rawPlan = userRole === 'PLATFORM_ADMIN'
+    ? 'PLATINUM'
+    : userRole === 'ADMIN'
+      ? 'PREMIUM'
+      : (subscription?.plan === 'PRO' ? 'PREMIUM' : (subscription?.plan || 'FREE'))
+  const plan         = rawPlan
+  const status       = (userRole === 'PLATFORM_ADMIN' || userRole === 'ADMIN')
+    ? 'ACTIVE'
+    : (subscription?.status || 'ACTIVE').toUpperCase()
   const isCancelled  = status === 'CANCELLED'
   const isHalted     = status === 'HALTED'
   const isPlatinum   = plan === 'PLATINUM'
@@ -107,7 +116,11 @@ export default function BillingPage() {
   const isRecurring  = !!(subscription?.razorpaySubscriptionId || subscription?.razorpayOrderId)
 
   const planDisplayName = isPlatinum ? 'Platinum' : isPremium ? 'Premium' : 'Free Plan'
-  const planPrice       = isPlatinum ? '₹149' : isPremium ? '₹100' : '₹0'
+  const planPrice       = isPlatinum
+    ? (userRole === 'PLATFORM_ADMIN' ? '₹0' : '₹149')
+    : isPremium
+      ? (userRole === 'ADMIN' ? '₹0' : '₹100')
+      : '₹0'
   const features        = isPlatinum ? PLATINUM_FEATURES : isPremium ? PREMIUM_FEATURES : FREE_FEATURES
 
   const handleCancel = async () => {
@@ -164,9 +177,11 @@ export default function BillingPage() {
                 </div>
                 <div className="billing-plan-price">
                   <strong>{planPrice}</strong>
-                  {isProUser
-                    ? <span className="billing-price-sub">/month · auto-renews</span>
-                    : <span className="billing-price-sub">— yours for life, no card needed</span>
+                  {(userRole === 'PLATFORM_ADMIN' || userRole === 'ADMIN')
+                    ? <span className="billing-price-sub"> · complimentary — included with your role</span>
+                    : isProUser
+                      ? <span className="billing-price-sub">/month · auto-renews</span>
+                      : <span className="billing-price-sub">— yours for life, no card needed</span>
                   }
                   {isCancelled && subscription?.endDate && (
                     <span className="billing-plan-note muted">
