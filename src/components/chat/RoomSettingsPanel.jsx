@@ -34,6 +34,7 @@ import { api } from '../../services/api'
 import { ws } from '../../services/websocket'
 import { enrichRoomMembers, getMemberDisplay } from '../../utils/roomMembers'
 import { X, Settings, Users, Image, Trash2, Shield, VolumeX, Volume2, UserMinus, Loader2, Search, LogOut, Copy, Link, RefreshCw, Camera, Lock, Hash, Download, Film, FileText, File, Forward, Check } from 'lucide-react'
+import Avatar from '../common/Avatar'
 import './RoomSettingsPanel.css'
 
 export default function RoomSettingsPanel({ roomId, onClose, initialTab = 'info' }) {
@@ -470,7 +471,16 @@ export default function RoomSettingsPanel({ roomId, onClose, initialTab = 'info'
                   return (
                     <div key={m.memberId || m.userId} className="rsp-member">
                       <div className="rsp-member-av-wrap">
-                        <div className="rsp-member-av">{m.role === 'ADMIN' ? '👑' : '👤'}</div>
+                        <div className="rsp-member-av">
+                          <Avatar
+                            src={m.avatarUrl}
+                            name={getMemberDisplay(m).primary}
+                            className="rsp-member-av-img"
+                            viewable
+                            viewName={getMemberDisplay(m).primary}
+                          />
+                          {m.role === 'ADMIN' && <span className="rsp-admin-crown" title="Admin">👑</span>}
+                        </div>
                         {(() => {
                           const st = (presenceStatuses[m.userId] || '').toUpperCase()
                           if (!st || st === 'OFFLINE') return null

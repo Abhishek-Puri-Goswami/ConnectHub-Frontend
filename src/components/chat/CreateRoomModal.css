@@ -132,3 +132,20 @@
 .mdl-result-info { flex: 1; min-width: 0; }
 .mdl-result-name { font-size: 13px; font-weight: 700; color: var(--text); }
 .mdl-result-email { font-size: 11.5px; color: var(--text-muted); }
+
+/* ── Plan-limit error block ─────────────────────────────── */
+.crm-error-block {
+  display: flex; flex-direction: column; gap: 8px;
+  margin-top: 4px;
+}
+.crm-upgrade-btn {
+  display: inline-flex; align-items: center; gap: 6px;
+  padding: 7px 14px;
+  border: none; border-radius: var(--r-sm);
+  background: linear-gradient(135deg, var(--primary) 0%, var(--accent) 100%);
+  color: #fff; font-size: 12.5px; font-weight: 700;
+  cursor: pointer; align-self: flex-start;
+  transition: opacity 0.15s var(--ease), transform 0.15s var(--ease);
+  box-shadow: 0 3px 10px rgba(124,58,237,0.28);
+}
+.crm-upgrade-btn:hover { opacity: 0.9; transform: translateY(-1px); }

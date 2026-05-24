@@ -53,10 +53,29 @@
 }
 .rsp-member:hover { background: var(--surface-3); }
 .rsp-member-av {
+  position: relative;
   width: 36px; height: 36px; flex-shrink: 0;
   display: flex; align-items: center; justify-content: center;
   font-size: 18px;
   background: var(--surface-3); border-radius: 50%;
+  overflow: visible;
+}
+
+/* Real avatar image inside the member row */
+.rsp-member-av-img {
+  width: 36px; height: 36px;
+  border-radius: 50%;
+  object-fit: cover;
+  flex-shrink: 0;
+}
+
+/* Crown badge for admins — bottom-right corner of avatar */
+.rsp-admin-crown {
+  position: absolute;
+  bottom: -4px; right: -4px;
+  font-size: 12px;
+  line-height: 1;
+  pointer-events: none;
 }
 .rsp-member-info { flex: 1; min-width: 0; }
 .rsp-member-name {

@@ -62,22 +62,44 @@
 .sys-status.ok   { background: var(--success-soft); color: #2D8B69; }
 .sys-status.warn { background: var(--warning-soft); color: #B8860B; }
 
+/* Header right-side action group */
+.admin-header-actions {
+  display: flex; align-items: center; gap: 8px;
+  flex-shrink: 0;
+}
+
+/* Theme popover must escape admin-page's overflow:hidden — use fixed positioning */
+.admin-page .tp-pop {
+  position: fixed;
+  top: 58px;
+  right: 22px;
+  z-index: 9000;
+}
+@media (max-width: 480px) {
+  .admin-page .tp-pop {
+    top: auto;
+    bottom: 80px;
+    right: 10px;
+    left: 10px;
+  }
+}
+
 .admin-back-btn {
   display: flex; align-items: center; gap: 6px;
   padding: 7px 14px;
   border-radius: var(--r-sm);
-  border: 1px solid var(--border);
-  background: var(--surface);
-  color: var(--text-soft);
-  font-size: 0.8rem; font-weight: 500;
+  border: 1px solid var(--primary);
+  background: var(--primary-soft);
+  color: var(--primary);
+  font-size: 0.8rem; font-weight: 600;
   cursor: pointer;
   box-shadow: var(--clay-shadow-sm);
   transition: all 0.2s ease;
   white-space: nowrap;
 }
 .admin-back-btn:hover {
-  background: var(--surface-hover);
-  color: var(--text);
+  background: var(--primary);
+  color: var(--primary-text, #fff);
   transform: translateY(-1px);
   box-shadow: var(--clay-shadow);
 }
@@ -631,8 +653,11 @@
   .admin-page { padding: 10px 12px; }
   .admin-table-wrap { overflow-x: auto; }
   .admin-header { flex-direction: column; align-items: flex-start; gap: 8px; }
+  .admin-header-actions { align-self: flex-end; }
   .analytics-stat-grid { grid-template-columns: repeat(2, 1fr); }
   .admin-broadcast-card { max-width: 100%; }
+  /* Slightly smaller title on tablet */
+  .admin-header h1 { font-size: 1.05rem; }
 }
 
 @media (max-width: 640px) {
@@ -664,11 +689,14 @@
   .admin-page { padding: 8px 10px; gap: 8px; }
 
   /* Header: compact */
-  .admin-header h1 { font-size: 1rem; }
+  .admin-header h1 { font-size: 0.95rem; }
   .admin-header p { display: none; }
-  /* Back button: icon only */
+  /* Back button: icon only on very small screens */
   .admin-back-btn .btn-text { display: none; }
   .admin-back-btn { padding: 7px 10px; }
+  /* Hide theme label on small screens (icon only compact mode) */
+  .admin-header-actions .tp-btn:not(.compact) .tp-label { display: none; }
+  .admin-header-actions .tp-btn:not(.compact) .tp-preview { width: 14px; height: 14px; }
 
   /* Stats strip: pills get slightly smaller */
   .admin-stat-pill { padding: 7px 9px; }

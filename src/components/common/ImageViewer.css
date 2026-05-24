@@ -1,0 +1,84 @@
+/* ═══════════════════════════════════════════════════════════
+   ImageViewer — Full-screen lightbox overlay
+   ═══════════════════════════════════════════════════════════ */
+
+.imgv-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 9999;
+  background: rgba(0, 0, 0, 0.85);
+  backdrop-filter: blur(8px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  animation: imgv-fade 0.18s ease;
+}
+
+@keyframes imgv-fade {
+  from { opacity: 0 }
+  to   { opacity: 1 }
+}
+
+/* Close button — top-right corner */
+.imgv-close {
+  position: fixed;
+  top: 18px;
+  right: 18px;
+  width: 38px;
+  height: 38px;
+  border-radius: 50%;
+  border: none;
+  background: rgba(255, 255, 255, 0.15);
+  color: #fff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: background 0.15s, transform 0.15s;
+  z-index: 10000;
+  backdrop-filter: blur(4px);
+}
+
+.imgv-close:hover {
+  background: rgba(255, 255, 255, 0.28);
+  transform: scale(1.08);
+}
+
+/* Stage — image + caption centered, non-clickable */
+.imgv-stage {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 14px;
+  padding: 16px;
+  animation: imgv-scale 0.2s cubic-bezier(0.34, 1.56, 0.64, 1);
+  max-width: 90vw;
+  max-height: 90vh;
+}
+
+@keyframes imgv-scale {
+  from { transform: scale(0.88); opacity: 0 }
+  to   { transform: scale(1);    opacity: 1 }
+}
+
+.imgv-img {
+  display: block;
+  max-width: min(480px, 85vw);
+  max-height: min(480px, 75vh);
+  width: auto;
+  height: auto;
+  border-radius: 16px;
+  box-shadow: 0 24px 60px rgba(0, 0, 0, 0.6);
+  object-fit: contain;
+  user-select: none;
+  -webkit-user-drag: none;
+}
+
+.imgv-caption {
+  color: rgba(255, 255, 255, 0.85);
+  font-size: 0.9rem;
+  font-weight: 500;
+  margin: 0;
+  text-align: center;
+  letter-spacing: 0.01em;
+}

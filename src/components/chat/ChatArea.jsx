@@ -446,7 +446,7 @@ export default function ChatArea({ wsConnected }) {
         <div className="ca-head-av-wrap">
           {room?.type === 'DM' ? (
             <>
-              <Avatar src={dmAvatarUrl} name={headerName} className="ca-head-av" />
+              <Avatar src={dmAvatarUrl} name={headerName} className="ca-head-av" viewable viewName={headerName} />
               {(isOtherOnline || otherPresenceStatus === 'AWAY' || otherPresenceStatus === 'DND') && (
                 <span className={`ca-head-av-dot ${dmDotClass}`}/>
               )}
@@ -619,7 +619,7 @@ export default function ChatArea({ wsConnected }) {
               /* DM contact info: avatar, name, online status, email, phone, settings button */
               <div className="ca-info-dm">
                 <div className="ca-info-dm-av-wrap">
-                  <Avatar src={dmAvatarUrl} name={headerName} className="ca-info-dm-av" />
+                  <Avatar src={dmAvatarUrl} name={headerName} className="ca-info-dm-av" viewable viewName={headerName} />
                   {(isOtherOnline || otherPresenceStatus === 'AWAY' || otherPresenceStatus === 'DND') && (
                     <span className={`ca-head-av-dot ${dmDotClass}`}/>
                   )}
@@ -692,7 +692,7 @@ export default function ChatArea({ wsConnected }) {
                     return (
                       <div key={m.userId || m.id} className="ca-member-row">
                         <div className="ca-member-av-wrap">
-                          <Avatar src={m.avatarUrl} name={nameDisp} className="ca-member-av" />
+                          <Avatar src={m.avatarUrl} name={nameDisp} className="ca-member-av" viewable viewName={nameDisp} />
                           <span className={`ca-member-dot ${mDotCls}`}/>
                         </div>
                         <div className="ca-member-info">

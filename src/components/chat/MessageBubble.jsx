@@ -266,7 +266,7 @@ const MessageBubble = memo(function MessageBubble({
     >
       {/* Avatar column — only shows avatar on the first message of a cluster */}
       <div className="mb-av-col">
-        {showAvatar ? <Avatar src={senderMember?.avatarUrl} name={senderName} isOwn={isOwn} className="mb-av" /> : <div className="mb-av-spacer"/>}
+        {showAvatar ? <Avatar src={senderMember?.avatarUrl} name={senderName} isOwn={isOwn} className="mb-av" viewable viewName={senderName} /> : <div className="mb-av-spacer"/>}
       </div>
 
       <div className="mb-col">

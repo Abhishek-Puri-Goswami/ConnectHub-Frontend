@@ -1,7 +1,7 @@
 /* ─── HomePage.css ────────────────────────────────────────────────────────── */
 
 .home-container {
-  height: 100vh;
+  min-height: 100vh;
   display: flex;
   flex-direction: column;
   overflow-y: auto;
@@ -53,11 +53,13 @@
 }
 
 /* Fix: theme popover is clipped by overflow-x:hidden on .home-container.
-   Use fixed positioning so it escapes all overflow/stacking-context constraints. */
+   Use fixed positioning so it escapes all overflow/stacking-context constraints.
+   z-index 9000 ensures it sits above all homepage sections. */
 .home-header .tp-pop {
   position: fixed;
   top: 70px;
   right: 40px;
+  z-index: 9000;
 }
 @media (max-width: 768px) {
   .home-header .tp-pop {
@@ -68,9 +70,10 @@
   .home-header .tp-pop {
     position: fixed;
     top: auto;
-    bottom: 80px;
+    bottom: 72px;
     right: 12px;
     left: 12px;
+    z-index: 9000;
   }
 }
 
@@ -398,6 +401,7 @@
   border-top: 1px solid var(--border);
   background: var(--surface);
   flex-shrink: 0;
+  width: 100%;
 }
 .footer-content {
   max-width: 1200px;

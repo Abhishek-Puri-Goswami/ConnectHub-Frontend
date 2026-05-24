@@ -76,7 +76,9 @@ export default function Sidebar({ wsConnected, onAnnouncementOpen }) {
   const [createTab, setCreateTab] = useState('dm')
   const [showProfile, setShowProfile] = useState(false)
   const [menuOpen, setMenuOpen] = useState(false)
-  const plan = subscription?.plan || (user?.subscriptionTier) || 'FREE'
+  // Normalize legacy "PRO" plan name to "PREMIUM" for display
+  const rawPlan   = subscription?.plan || (user?.subscriptionTier) || 'FREE'
+  const plan      = rawPlan === 'PRO' ? 'PREMIUM' : rawPlan
   const planLabel = plan === 'PLATINUM' ? 'Platinum' : plan === 'PREMIUM' ? 'Premium' : 'Free'
   const PlanIcon  = plan === 'PLATINUM' ? Crown : plan === 'PREMIUM' ? Zap : Package
   const [statusPickerOpen, setStatusPickerOpen] = useState(false)
@@ -293,21 +295,19 @@ export default function Sidebar({ wsConnected, onAnnouncementOpen }) {
           )}
         </div>
 
-        {/* Footer: avatar (click = status picker) + user info (click = profile) */}
+        {/* Footer: avatar (click = view photo) + user info (click = profile) */}
         <div className="sb-footer">
           <div className="sb-user-card">
             <div className="sb-status-wrap">
-              <button
-                className="sb-status-trigger"
-                onClick={() => setStatusPickerOpen(v => !v)}
-                title="Set status"
-                aria-expanded={statusPickerOpen}
-              >
-                <div className="sb-user-av-wrap">
-                  <Avatar src={user?.avatarUrl} name={user?.username || '?'} className="sb-user-av" />
-                  <span className={`sb-user-dot ${dotClass}`} title={dotClass === 'off' ? 'Connecting…' : STATUS_OPTIONS.find(o => o.cls === dotClass)?.label || 'Online'}/>
-                </div>
-              </button>
+              <div className="sb-user-av-wrap">
+                <Avatar
+                  src={user?.avatarUrl}
+                  name={user?.fullName || user?.username || '?'}
+                  className="sb-user-av"
+                  viewable
+                  viewName={user?.fullName || user?.username}
+                />
+              </div>
               {statusPickerOpen && (
                 <>
                   <div className="sb-status-backdrop" onClick={() => setStatusPickerOpen(false)} />

@@ -38,7 +38,8 @@ import { createPortal } from 'react-dom'
 import { api } from '../../services/api'
 import { useAuthStore } from '../../store/authStore'
 import { useChatStore } from '../../store/chatStore'
-import { X, Hash, Lock, User, Loader2, Search, MessageCircle, Users, Check, Compass } from 'lucide-react'
+import { X, Hash, Lock, User, Loader2, Search, MessageCircle, Users, Check, Compass, Zap } from 'lucide-react'
+import UpgradeModal from './UpgradeModal'
 import './CreateRoomModal.css'
 
 export default function CreateRoomModal({ onClose, initialTab = 'group' }) {
@@ -57,6 +58,8 @@ export default function CreateRoomModal({ onClose, initialTab = 'group' }) {
   const [isPrivate, setIsPrivate] = useState(false)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
+  const [limitHit, setLimitHit] = useState(false)
+  const [showUpgrade, setShowUpgrade] = useState(false)
   const [searchQuery, setSearchQuery] = useState('')
   const [searchResults, setSearchResults] = useState([])
   const [selectedUsers, setSelectedUsers] = useState([])
@@ -136,6 +139,7 @@ export default function CreateRoomModal({ onClose, initialTab = 'group' }) {
    */
   const handleCreate = async () => {
     setError('')
+    setLimitHit(false)
     if (tab === 'group' && !name.trim()) { setError('Room name is required'); return }
     if (tab === 'group' && selectedUsers.length < 1) { setError('Add at least one member'); return }
     if (tab === 'dm' && selectedUsers.length !== 1) { setError('Select one user for DM'); return }
@@ -151,11 +155,24 @@ export default function CreateRoomModal({ onClose, initialTab = 'group' }) {
       addRoom(room)
       setActiveRoom(room.roomId)
       onClose()
-    } catch (err) { setError(err.message || 'Could not create') }
+    } catch (err) {
+      const msg = (err.message || 'Could not create')
+        .replace(/\bPRO\b/gi, 'Premium')
+        .replace(/\bpro\b/gi, 'Premium')
+      // Detect plan-limit errors (group chat quota exceeded)
+      const isLimit = /limit|upgrade|group chat|maximum/i.test(msg)
+      setLimitHit(isLimit)
+      setError(msg)
+    }
     finally { setLoading(false) }
   }
 
-  return createPortal(
+  return (
+    <>
+    {showUpgrade && (
+      <UpgradeModal isOpen={showUpgrade} onClose={() => setShowUpgrade(false)} message="Upgrade to get more group chats." />
+    )}
+    {createPortal(
     /* Overlay backdrop — clicking outside the card closes the modal */
     <div className="modal-overlay fade-in" onClick={onClose}>
       {/* stopPropagation prevents clicks inside the card from closing it */}
@@ -266,7 +283,16 @@ export default function CreateRoomModal({ onClose, initialTab = 'group' }) {
             </div>
           )}
 
-          {error && <p className="error-text"><X size={14}/> {error}</p>}
+          {error && (
+            <div className="crm-error-block">
+              <p className="error-text"><X size={14}/> {error}</p>
+              {limitHit && (
+                <button className="crm-upgrade-btn" onClick={() => setShowUpgrade(true)}>
+                  <Zap size={13}/> Upgrade your plan
+                </button>
+              )}
+            </div>
+          )}
         </div>}
 
         {/* ── Discover tab body ── */}
@@ -327,7 +353,16 @@ export default function CreateRoomModal({ onClose, initialTab = 'group' }) {
               </div>
             )}
 
-            {error && <p className="error-text"><X size={14}/> {error}</p>}
+            {error && (
+              <div className="crm-error-block">
+                <p className="error-text"><X size={14}/> {error}</p>
+                {limitHit && (
+                  <button className="crm-upgrade-btn" onClick={() => setShowUpgrade(true)}>
+                    <Zap size={13}/> Upgrade your plan
+                  </button>
+                )}
+              </div>
+            )}
           </div>
         )}
 
@@ -343,5 +378,7 @@ export default function CreateRoomModal({ onClose, initialTab = 'group' }) {
       </div>
     </div>,
     document.body
+    )}
+    </>
   )
 }

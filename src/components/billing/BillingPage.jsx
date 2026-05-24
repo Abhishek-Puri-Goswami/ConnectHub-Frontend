@@ -9,9 +9,10 @@
  *
  * Plan tiers: FREE | PREMIUM (₹100) | PLATINUM (₹149)
  *
- * Layout (2-col on wide screens):
- *   Left   — active plan card + plan comparison row
- *   Right  — subscription detail cards + payment history table
+ * Layout:
+ *   Top 2-col — Left: active plan card + plan comparison row
+ *               Right: subscription detail cards
+ *   Full-width — Transaction history table
  */
 import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
@@ -95,13 +96,15 @@ export default function BillingPage() {
   }, [])
 
   const isProUser    = isPro()
-  const plan         = subscription?.plan || 'FREE'
+  // Normalize legacy "PRO" plan name (old backend) to "PREMIUM" for consistent display
+  const rawPlan      = subscription?.plan || 'FREE'
+  const plan         = rawPlan === 'PRO' ? 'PREMIUM' : rawPlan
   const status       = (subscription?.status || 'ACTIVE').toUpperCase()
   const isCancelled  = status === 'CANCELLED'
   const isHalted     = status === 'HALTED'
   const isPlatinum   = plan === 'PLATINUM'
   const isPremium    = plan === 'PREMIUM'
-  const isRecurring  = !!subscription?.razorpaySubscriptionId
+  const isRecurring  = !!(subscription?.razorpaySubscriptionId || subscription?.razorpayOrderId)
 
   const planDisplayName = isPlatinum ? 'Platinum' : isPremium ? 'Premium' : 'Free Plan'
   const planPrice       = isPlatinum ? '₹149' : isPremium ? '₹100' : '₹0'
@@ -134,29 +137,25 @@ export default function BillingPage() {
         </button>
       </div>
 
-      {/* ── Two-column body ─────────────────────────────────────── */}
+      {/* ── Two-column top section: plan info + subscription details ── */}
       <div className="billing-body">
 
-        {/* LEFT column — plan info */}
+        {/* LEFT column — active plan + tier comparison */}
         <div className="billing-left">
 
           {/* Active plan card */}
           <div className={`billing-plan-card ${isPlatinum ? 'platinum' : isProUser ? 'pro' : ''}`}>
             <div className="billing-plan-card-top">
-              {/* Left: name + price stacked */}
               <div className="billing-plan-card-left">
                 <div className="billing-plan-name">
                   {isPlatinum ? <Crown size={16}/> : isProUser ? <Zap size={16}/> : <Package size={16}/>}
                   {planDisplayName}
-                  {/* "Current" badge — always shown */}
                   <span className="billing-plan-badge current-badge">Current</span>
-                  {/* Paid tier badge */}
                   {(isPremium || isPlatinum) && (
                     <span className={`billing-plan-badge ${isPlatinum ? 'platinum' : 'pro'}`}>
                       {isPlatinum ? 'Platinum' : 'Premium'}
                     </span>
                   )}
-                  {/* Status badge for paid plans */}
                   {(isPremium || isPlatinum) && (
                     <span className={`billing-plan-badge ${status === 'ACTIVE' ? 'active' : status === 'CANCELLED' ? 'cancelled' : status === 'HALTED' ? 'halted' : 'pending-badge'}`}>
                       {status === 'ACTIVE' ? 'Active' : status === 'CANCELLED' ? 'Cancelled' : status === 'HALTED' ? 'Payment failed' : status}
@@ -182,7 +181,6 @@ export default function BillingPage() {
                 </div>
               </div>
 
-              {/* Right: upgrade / resubscribe button */}
               <div className="billing-plan-actions">
                 {!isProUser && (
                   <button className="billing-upgrade-btn" onClick={() => openUpgradeModal('PLATINUM')}>
@@ -206,7 +204,7 @@ export default function BillingPage() {
               ))}
             </div>
 
-            {/* Cancel / confirm actions (separate row, below features) */}
+            {/* Cancel / confirm */}
             <div className="billing-plan-actions">
               {isProUser && isRecurring && !isCancelled && (
                 !showCancelConfirm ? (
@@ -238,7 +236,7 @@ export default function BillingPage() {
             </div>
           </div>
 
-          {/* ── Plan comparison row ──────────────────────────────── */}
+          {/* Plan comparison row */}
           <div className="billing-tiers">
             {TIERS.map(tier => {
               const isActive = plan === tier.key
@@ -258,7 +256,6 @@ export default function BillingPage() {
                       <li key={f}><Check size={10}/> {f}</li>
                     ))}
                   </ul>
-                  {/* Only show the upgrade CTA for paid tiers the user isn't already on */}
                   {!isActive && tier.key !== 'FREE' && (
                     <button
                       className={`billing-tier-btn ${tier.key.toLowerCase()}`}
@@ -273,106 +270,118 @@ export default function BillingPage() {
           </div>
         </div>
 
-        {/* RIGHT column — subscription details + payment history */}
+        {/* RIGHT column — subscription detail cards */}
         <div className="billing-right">
-
-          {/* Subscription detail cards — only for paid users */}
-          {isProUser && subscription && (
-            <div className="billing-details-grid">
-              <div className="billing-detail-card">
-                <div className="billing-detail-label">Subscription ID</div>
-                <div className="billing-detail-value mono">
-                  {subscription.razorpaySubscriptionId || subscription.razorpayOrderId || subscription.id || '—'}
-                </div>
-              </div>
-              <div className="billing-detail-card">
-                <div className="billing-detail-label"><Calendar size={11} style={{ display:'inline', verticalAlign:'-1px' }}/> Start Date</div>
-                <div className="billing-detail-value">
-                  {subscription.startDate ? format(new Date(subscription.startDate), 'MMM d, yyyy') : '—'}
-                </div>
-              </div>
-              <div className="billing-detail-card">
-                <div className="billing-detail-label"><Clock size={11} style={{ display:'inline', verticalAlign:'-1px' }}/> {isCancelled ? 'Access Until' : 'Next Billing'}</div>
-                <div className="billing-detail-value">
-                  {subscription.endDate ? format(new Date(subscription.endDate), 'MMM d, yyyy') : '—'}
-                </div>
-              </div>
-              <div className="billing-detail-card">
-                <div className="billing-detail-label"><Shield size={11} style={{ display:'inline', verticalAlign:'-1px' }}/> Status</div>
-                <div className="billing-detail-value">{subscription.status || 'ACTIVE'}</div>
+          <div className="billing-details-grid">
+            <div className="billing-detail-card">
+              <div className="billing-detail-label">Subscription ID</div>
+              <div className="billing-detail-value mono">
+                {subscription?.razorpaySubscriptionId || subscription?.razorpayOrderId || subscription?.id || '—'}
               </div>
             </div>
-          )}
-
-          {/* Payment history */}
-          <div className="billing-section-title">
-            <Receipt size={15}/> Transaction History
+            <div className="billing-detail-card">
+              <div className="billing-detail-label">
+                <Calendar size={11} style={{ display: 'inline', verticalAlign: '-1px' }}/> Start Date
+              </div>
+              <div className="billing-detail-value">
+                {subscription?.startDate ? format(new Date(subscription.startDate), 'MMM d, yyyy') : '—'}
+              </div>
+            </div>
+            <div className="billing-detail-card">
+              <div className="billing-detail-label">
+                <Clock size={11} style={{ display: 'inline', verticalAlign: '-1px' }}/> {isCancelled ? 'Access Until' : 'Next Billing'}
+              </div>
+              <div className="billing-detail-value">
+                {subscription?.endDate ? format(new Date(subscription.endDate), 'MMM d, yyyy') : '—'}
+              </div>
+            </div>
+            <div className="billing-detail-card">
+              <div className="billing-detail-label">
+                <Shield size={11} style={{ display: 'inline', verticalAlign: '-1px' }}/> Status
+              </div>
+              <div className={`billing-detail-value billing-detail-status ${status.toLowerCase()}`}>
+                {subscription?.status || 'ACTIVE'}
+              </div>
+            </div>
           </div>
+        </div>
+      </div>
 
-          {loading && payments.length === 0 ? (
-            <div className="billing-empty-inline">
-              <Loader2 size={16} className="spin"/>
-              <span>Loading payment history…</span>
-            </div>
-          ) : (
-            <div className="billing-history-table">
-              <table>
-                <thead>
-                  <tr>
-                    <th>Date</th>
-                    <th>Description</th>
-                    <th>Amount</th>
-                    <th>Status</th>
-                    <th>Transaction ID</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {/* Always show a plan activation row */}
+      {/* ── Full-width Transaction History ───────────────────────── */}
+      <div className="billing-history-section">
+        <div className="billing-section-title">
+          <Receipt size={15}/> Transaction History
+        </div>
+
+        {loading && payments.length === 0 ? (
+          <div className="billing-empty-inline">
+            <Loader2 size={16} className="spin"/>
+            <span>Loading payment history…</span>
+          </div>
+        ) : (
+          <div className="billing-history-table">
+            <table>
+              <thead>
+                <tr>
+                  <th>Date</th>
+                  <th>Description</th>
+                  <th>Amount</th>
+                  <th>Status</th>
+                  <th>Transaction ID</th>
+                </tr>
+              </thead>
+              <tbody>
+                {/* Paid plan activation row — only for PREMIUM / PLATINUM users */}
+                {isProUser && (
                   <tr className="billing-plan-activation-row">
-                    <td style={{ whiteSpace: 'nowrap' }}>
+                    <td>
                       {subscription?.startDate
                         ? format(new Date(subscription.startDate), 'MMM d, yyyy')
-                        : format(new Date(user?.createdAt || Date.now()), 'MMM d, yyyy')}
+                        : '—'}
                     </td>
                     <td>
                       <span className="billing-plan-activation-label">
-                        {isPlatinum ? <Crown size={11}/> : isProUser ? <Zap size={11}/> : <Package size={11}/>}
-                        ConnectHub {planDisplayName} — Plan Activated
+                        {isPlatinum ? <Crown size={11}/> : <Zap size={11}/>}
+                        {planDisplayName} — Activated
                       </span>
                     </td>
-                    <td style={{ fontWeight: 700 }}>{planPrice}{isProUser ? '/mo' : ''}</td>
-                    <td>
-                      <span className="billing-payment-status captured">Active</span>
-                    </td>
+                    <td><span className="billing-amount-cell">{planPrice}/mo</span></td>
+                    <td><span className="billing-payment-status captured">Active</span></td>
                     <td className="billing-txn-id">
-                      {subscription?.razorpaySubscriptionId || '—'}
+                      {subscription?.razorpayOrderId || '—'}
                     </td>
                   </tr>
-                  {/* Real payment transactions */}
-                  {payments.map((p, i) => (
-                    <tr key={p.id || i}>
-                      <td style={{ whiteSpace: 'nowrap' }}>
-                        {p.createdAt ? format(new Date(p.createdAt), 'MMM d, yyyy') : '—'}
-                      </td>
-                      <td>{p.description || `ConnectHub ${planDisplayName} — Monthly Renewal`}</td>
-                      <td style={{ fontWeight: 700 }}>
-                        {p.currency === 'INR' ? '₹' : (p.currency || '₹')}{(p.amount || 0) / 100}
-                      </td>
-                      <td>
-                        <span className={`billing-payment-status ${(p.status || '').toLowerCase()}`}>
-                          {p.status || '—'}
-                        </span>
-                      </td>
-                      <td className="billing-txn-id">
-                        {p.razorpayPaymentId || p.transactionId || '—'}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          )}
-        </div>
+                )}
+                {/* Real payment transactions */}
+                {payments.map((p, i) => (
+                  <tr key={p.id || i}>
+                    <td>{p.createdAt ? format(new Date(p.createdAt), 'MMM d, yyyy') : '—'}</td>
+                    <td>{p.description || `${planDisplayName} renewal`}</td>
+                    <td>
+                      <span className="billing-amount-cell">₹{(p.amount || 0) / 100}</span>
+                    </td>
+                    <td>
+                      <span className={`billing-payment-status ${(p.status || '').toLowerCase()}`}>
+                        {p.status || '—'}
+                      </span>
+                    </td>
+                    <td className="billing-txn-id">
+                      {p.razorpayPaymentId || p.transactionId || '—'}
+                    </td>
+                  </tr>
+                ))}
+                {/* Empty state for free users */}
+                {!isProUser && payments.length === 0 && (
+                  <tr>
+                    <td colSpan={5} style={{ textAlign: 'center', color: 'var(--text-muted)', padding: '24px 14px', fontStyle: 'italic', fontSize: '0.8rem' }}>
+                      No transactions yet — upgrade to a paid plan to see billing history.
+                    </td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+          </div>
+        )}
       </div>
     </div>
   )

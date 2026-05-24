@@ -274,9 +274,13 @@ class WebSocketService {
         this.client.subscribe("/user/" + userId + "/queue/errors", (msg) => {
           try {
             const err = JSON.parse(msg.body);
-            if (err.reason === "LIMIT_EXCEEDED") {
+            // Backend sends "RATE_LIMIT" from KafkaMessageListener;
+            // treat both as the same limit-exceeded event for the UI.
+            if (err.reason === "LIMIT_EXCEEDED" || err.reason === "RATE_LIMIT") {
               window.dispatchEvent(
-                new CustomEvent("rateLimitExceeded", { detail: err }),
+                new CustomEvent("rateLimitExceeded", {
+                  detail: { ...err, reason: "LIMIT_EXCEEDED" },
+                }),
               );
             }
           } catch (e) {}
@@ -489,9 +493,13 @@ class WebSocketService {
         this.client.subscribe("/user/" + userId + "/queue/errors", (msg) => {
           try {
             const err = JSON.parse(msg.body);
-            if (err.reason === "LIMIT_EXCEEDED") {
+            // Backend sends "RATE_LIMIT" from KafkaMessageListener;
+            // treat both as the same limit-exceeded event for the UI.
+            if (err.reason === "LIMIT_EXCEEDED" || err.reason === "RATE_LIMIT") {
               window.dispatchEvent(
-                new CustomEvent("rateLimitExceeded", { detail: err }),
+                new CustomEvent("rateLimitExceeded", {
+                  detail: { ...err, reason: "LIMIT_EXCEEDED" },
+                }),
               );
             }
           } catch (e) {}

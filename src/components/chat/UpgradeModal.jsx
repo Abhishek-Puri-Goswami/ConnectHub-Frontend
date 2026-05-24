@@ -55,6 +55,7 @@ export default function UpgradeModal({ isOpen, onClose, message }) {
   const [step, setStep] = useState('idle')
   const [localError, setLocalError] = useState(null)
   const [activating, setActivating] = useState(true)
+  const [planConfirmed, setPlanConfirmed] = useState(false)
   const pollRef = useRef(null)
 
   useEffect(() => {
@@ -81,19 +82,26 @@ export default function UpgradeModal({ isOpen, onClose, message }) {
     return () => { if (pollRef.current) clearInterval(pollRef.current) }
   }, [])
 
-  // Poll fetchSubscription after payment until backend confirms paid plan
+  // Poll fetchSubscription after payment until backend confirms paid plan (webhook lag)
   useEffect(() => {
     if (step !== 'success') return
     setActivating(true)
+    setPlanConfirmed(false)
     let attempts = 0
-    const maxAttempts = 10
+    const maxAttempts = 12  // 24 seconds max poll window
 
     const check = async () => {
       await fetchSubscription()
       attempts++
       const sub = usePaymentStore.getState().subscription
-      const isPaidNow = sub?.plan !== 'FREE' && (sub?.status || '').toUpperCase() !== 'EXPIRED'
-      if (isPaidNow || attempts >= maxAttempts) {
+      const isPaidNow = sub?.plan && sub.plan !== 'FREE'
+        && !['EXPIRED', 'PENDING'].includes((sub?.status || '').toUpperCase())
+      if (isPaidNow) {
+        setPlanConfirmed(true)
+        setActivating(false)
+        if (pollRef.current) clearInterval(pollRef.current)
+      } else if (attempts >= maxAttempts) {
+        // Poll timed out — payment captured but webhook hasn't arrived yet
         setActivating(false)
         if (pollRef.current) clearInterval(pollRef.current)
       }
@@ -170,18 +178,29 @@ export default function UpgradeModal({ isOpen, onClose, message }) {
             <p className="upgrade-success-sub">
               {activating
                 ? `Activating your ${activePlan.name} plan…`
-                : `Welcome to ConnectHub ${activePlan.name}! 🎉`}
+                : planConfirmed
+                  ? `Welcome to ConnectHub ${activePlan.name}! 🎉`
+                  : `Payment confirmed! Your plan is being activated.`}
             </p>
 
             {activating ? (
               <div className="upgrade-activating-pill">
                 <Loader2 size={13} className="spin"/>
-                <span>Setting up your account</span>
+                <span>Confirming with payment gateway…</span>
               </div>
-            ) : (
-              <button className="upgrade-btn upgrade-done-btn" onClick={onClose}>
+            ) : planConfirmed ? (
+              <button className="upgrade-btn upgrade-done-btn" onClick={() => { fetchSubscription(); onClose() }}>
                 <Zap size={15}/> Start using {activePlan.name}
               </button>
+            ) : (
+              <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 12 }}>
+                <p style={{ fontSize: '0.8rem', color: 'var(--text-muted)', textAlign: 'center', maxWidth: 280 }}>
+                  Your payment was received. Plan activation may take a moment — refresh the page in a few seconds.
+                </p>
+                <button className="upgrade-btn upgrade-done-btn" onClick={() => { fetchSubscription(); onClose() }}>
+                  Done
+                </button>
+              </div>
             )}
           </div>
         ) : (

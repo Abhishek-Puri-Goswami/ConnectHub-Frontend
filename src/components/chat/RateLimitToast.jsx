@@ -80,8 +80,8 @@ export default function RateLimitToast() {
     const handler = (e) => {
       const { action, limit, reason } = e.detail || {}
       const msg = reason === 'LIMIT_EXCEEDED'
-        ? `You're sending messages too fast.`
-        : `${ACTION_LABELS[action] || 'Your request'} was rate-limited.`
+        ? `Your message was not sent — you've hit your message rate limit.`
+        : `${ACTION_LABELS[action] || 'Your request'} was blocked by the rate limit.`
       addToast(action || 'messages', limit, msg)
     }
     window.addEventListener('rateLimitExceeded', handler)
@@ -96,7 +96,9 @@ export default function RateLimitToast() {
   useEffect(() => {
     const handler = (e) => {
       const { action, limit } = e.detail || {}
-      addToast(action || 'global', limit, `Too many ${ACTION_LABELS[action] || 'requests'}. Please slow down.`)
+      const label = ACTION_LABELS[action] || 'request'
+      const labelPlural = action === 'uploads' ? 'file uploads' : action === 'otp' ? 'OTP requests' : action === 'messages' ? 'messages' : 'requests'
+      addToast(action || 'global', limit, `Too many ${labelPlural}. Your ${label} was not sent — please slow down.`)
     }
     window.addEventListener('rateLimitHit', handler)
     return () => window.removeEventListener('rateLimitHit', handler)
@@ -184,7 +186,7 @@ function RateLimitToastItem({ toast, onDismiss, onUpgrade }) {
       </div>
       {/* Upgrade CTA — opens UpgradeModal to let the user subscribe to Premium */}
       <button className="rate-toast-upgrade" onClick={onUpgrade}>
-        <Zap size={12} /> Upgrade to Premium for higher limits
+        <Zap size={12} /> Upgrade your plan for higher limits
       </button>
       {/* Countdown progress bar */}
       <div className="rate-toast-progress">

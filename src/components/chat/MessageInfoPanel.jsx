@@ -27,7 +27,7 @@ function MemberRow({ member, status, timestamp }) {
   const name = member.fullName || member.username || `User #${member.userId}`
   return (
     <div className="mip-member-row">
-      <Avatar src={member.avatarUrl} name={name} className="mip-av" />
+      <Avatar src={member.avatarUrl} name={name} className="mip-av" viewable viewName={name} />
       <div className="mip-member-info">
         <span className="mip-member-name">{name}</span>
         {timestamp && <span className="mip-member-time">{fmtTime(timestamp)}</span>}

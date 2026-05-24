@@ -68,7 +68,14 @@ export const usePaymentStore = create((set, get) => ({
     set({ loading: true, error: null });
     try {
       const data = await paymentApi.getSubscriptionStatus();
+      // Normalize legacy "PRO" plan name to "PREMIUM" for consistent frontend checks
+      if (data && data.plan === "PRO") data.plan = "PREMIUM";
       set({ subscription: data, loading: false });
+      // Keep authStore user.subscriptionTier in sync so sidebar and other components
+      // that read user.subscriptionTier also reflect the current paid plan
+      if (data?.plan && data.plan !== "FREE") {
+        useAuthStore.getState().updateUser({ subscriptionTier: data.plan });
+      }
     } catch (e) {
       if (e.status === 404) {
         set({
@@ -152,12 +159,13 @@ export const usePaymentStore = create((set, get) => ({
       }
 
       const sub = await paymentApi.createSubscription(plan);
-      const rzpSubscriptionId = sub.razorpaySubscriptionId;
+      // Backend uses Razorpay Orders API — the widget needs order_id (not subscription_id)
+      const rzpOrderId = sub.razorpayOrderId;
 
       return new Promise((resolve, reject) => {
         const rzp = new window.Razorpay({
           key: keyId,
-          subscription_id: rzpSubscriptionId,
+          order_id: rzpOrderId,
           name: "ConnectHub",
           description: `ConnectHub ${planCfg.label} — ₹${amountPaise / 100}/month`,
           image: "/logo.png",

@@ -20,6 +20,8 @@ import {
   LineChart, Line, XAxis, YAxis, CartesianGrid,
   Tooltip, ResponsiveContainer, Legend
 } from 'recharts'
+import ImageViewer from '../common/ImageViewer'
+import ThemeToggle from '../../theme/ThemeToggle'
 import './AdminDashboard.css'
 
 /* ── helpers ────────────────────────────────────────────────────── */
@@ -140,6 +142,8 @@ export default function AdminDashboard() {
   const [usersPage, setUsersPage] = useState(0)
   const [sortField, setSortField] = useState('joined')
   const [sortDirection, setSortDirection] = useState('desc')
+  // Image lightbox — { src, name } when open, null when closed
+  const [viewingImage, setViewingImage] = useState(null)
 
   useEffect(() => { setUsersPage(0) }, [searchQuery])
 
@@ -298,6 +302,10 @@ export default function AdminDashboard() {
   return (
     <div className="admin-page">
 
+      {viewingImage && (
+        <ImageViewer src={viewingImage.src} name={viewingImage.name} onClose={() => setViewingImage(null)} />
+      )}
+
       {/* ── Header ── */}
       <div className="admin-header">
         <div className="admin-header-left">
@@ -315,9 +323,13 @@ export default function AdminDashboard() {
             <p>Manage users, analyze activity, nurturing community health.</p>
           </div>
         </div>
-        <button className="admin-back-btn" onClick={() => navigate('/chat')}>
-          <ArrowLeft size={14} /> Back to Chat
-        </button>
+        <div className="admin-header-actions">
+          <ThemeToggle />
+          <button className="admin-back-btn" onClick={() => navigate('/chat')}>
+            <ArrowLeft size={14} />
+            <span className="btn-text">Back to Chat</span>
+          </button>
+        </div>
       </div>
 
       {/* ── Stats Strip ── */}
@@ -483,7 +495,7 @@ export default function AdminDashboard() {
                             <div className="admin-user-cell">
                               <div className="admin-user-av">
                                 {u.avatarUrl
-                                  ? <img src={u.avatarUrl} alt={u.username} className="admin-user-av-img" />
+                                  ? <img src={u.avatarUrl} alt={u.username} className="admin-user-av-img" style={{ cursor: 'pointer' }} onClick={() => setViewingImage({ src: u.avatarUrl, name: u.fullName || u.username })} />
                                   : (u.fullName || u.username || '?')[0].toUpperCase()
                                 }
                               </div>
@@ -935,7 +947,7 @@ export default function AdminDashboard() {
                       <div key={uid} className="sc-row">
                         <div className="admin-user-av sc-av">
                           {u.avatarUrl
-                            ? <img src={u.avatarUrl} alt={u.username} className="admin-user-av-img" />
+                            ? <img src={u.avatarUrl} alt={u.username} className="admin-user-av-img" style={{ cursor: 'pointer' }} onClick={() => setViewingImage({ src: u.avatarUrl, name: u.fullName || u.username })} />
                             : (u.fullName || u.username || '?')[0].toUpperCase()
                           }
                         </div>
