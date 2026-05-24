@@ -270,6 +270,7 @@
 .admin-badge.admin     { background: var(--accent-soft);  color: var(--accent-hover); }
 .admin-badge.user      { background: var(--surface-3);    color: var(--text-soft); }
 .admin-badge.pro       { background: rgba(184,164,244,0.25); color: #7C3AED; }
+.admin-badge.dm        { background: rgba(59,130,246,0.12); color: #3B82F6; }
 
 /* ── Action buttons ── */
 .admin-actions { display: flex; gap: 5px; }
@@ -592,11 +593,16 @@
   display: flex; align-items: center; gap: 12px;
   padding: 11px 16px;
   border-bottom: 1px solid var(--border);
+  flex-wrap: wrap;
 }
 .health-row:last-child { border-bottom: none; }
-.health-label { font-size: 0.79rem; color: var(--text-soft); width: 160px; flex-shrink: 0; white-space: nowrap; }
+.health-label {
+  font-size: 0.79rem; color: var(--text-soft);
+  width: 150px; min-width: 120px; flex-shrink: 0;
+  white-space: nowrap;
+}
 .health-bar-wrap {
-  flex: 1; height: 6px;
+  flex: 1; min-width: 80px; height: 6px;
   background: var(--surface-3);
   border-radius: 3px; overflow: hidden;
 }
@@ -675,8 +681,8 @@
   .admin-toolbar { flex-direction: column; align-items: stretch; }
   .admin-search-bar { max-width: 100%; }
 
-  /* Health bar labels: narrower on small screens */
-  .health-label { width: 110px; }
+  /* Health bar labels: slightly narrower on medium-small screens */
+  .health-label { width: 130px; min-width: 100px; }
 
   /* Chart toolbar: stack title + pills */
   .chart-toolbar { flex-direction: column; align-items: flex-start; gap: 8px; }
@@ -706,8 +712,11 @@
   .analytics-stat-grid { grid-template-columns: 1fr 1fr; }
 
   /* Health bars: very narrow label */
-  .health-label { width: 88px; font-size: 0.71rem; }
-  .health-val { width: 36px; font-size: 0.72rem; }
+  /* Health rows: label full width, bar + value on next line */
+  .health-row { gap: 8px; }
+  .health-label { width: 100%; min-width: unset; font-size: 0.73rem; margin-bottom: 2px; }
+  .health-bar-wrap { flex: 1; min-width: 60px; }
+  .health-val { width: 40px; font-size: 0.72rem; }
 
   /* Security rows: hide email on tiny screens */
   .sc-row-email { display: none; }

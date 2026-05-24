@@ -30,12 +30,13 @@
  * Props:
  *   wsConnected (boolean) — used to render the green/grey dot on the user's own avatar
  */
-import { useState, useEffect, memo, useCallback, useMemo } from 'react'
+import { useState, useEffect, memo, useCallback, useMemo, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useAuthStore } from '../../store/authStore'
 import { useChatStore } from '../../store/chatStore'
 import { usePaymentStore } from '../../store/paymentStore'
 import { usePresenceStore } from '../../store/presenceStore'
+import { useToastStore } from '../../store/toastStore'
 import { api } from '../../services/api'
 import { enrichRoomMembers } from '../../utils/roomMembers'
 import {
@@ -105,15 +106,37 @@ export default function Sidebar({ wsConnected, onAnnouncementOpen }) {
     return () => window.removeEventListener('keydown', h)
   }, [])
 
-  /* Fetch platform announcements on mount */
+  /* Track newest seen announcement id to detect new ones for toast */
+  const newestSeenId = useRef(null)
+  const addToast = useToastStore(state => state.addToast)
+
+  /* Fetch platform announcements on mount and poll every 60 s for new ones */
   useEffect(() => {
     const base = import.meta.env.VITE_API_BASE_URL || '/api/v1'
-    const token = localStorage.getItem('accessToken')
-    fetch(`${base}/auth/announcements`, { headers: { Authorization: 'Bearer ' + token } })
-      .then(r => r.ok ? r.json() : [])
-      .then(data => setAnnouncements(Array.isArray(data) ? data : []))
-      .catch(() => {})
-  }, [])
+
+    const fetchAnnouncements = () => {
+      const token = localStorage.getItem('accessToken')
+      fetch(`${base}/auth/announcements`, { headers: { Authorization: 'Bearer ' + token } })
+        .then(r => r.ok ? r.json() : [])
+        .then(data => {
+          const list = Array.isArray(data) ? data : []
+          setAnnouncements(list)
+          // Fire a toast when a brand-new announcement arrives (after initial load)
+          if (list.length > 0 && newestSeenId.current !== null) {
+            const latest = list[0]
+            if (latest.id !== newestSeenId.current) {
+              addToast(`📢 New announcement: ${latest.title || latest.content?.slice(0, 60) || 'Platform update'}`, 'info')
+            }
+          }
+          if (list.length > 0) newestSeenId.current = list[0].id
+        })
+        .catch(() => {})
+    }
+
+    fetchAnnouncements()
+    const interval = setInterval(fetchAnnouncements, 60_000)
+    return () => clearInterval(interval)
+  }, [addToast])
 
   /* Client-side filter — searches room name and description — memoized */
   const filtered = useMemo(() =>

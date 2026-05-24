@@ -677,12 +677,12 @@ export default function AdminDashboard() {
                             </div>
                           </div>
                         </td>
-                        <td><span className={`admin-badge ${r.type === 'DM' ? 'user' : 'active'}`}>{r.type || 'GROUP'}</span></td>
+                        <td><span className={`admin-badge ${r.type === 'DM' ? 'dm' : 'active'}`}>{r.type || 'GROUP'}</span></td>
                         <td className="td-muted">{r.memberCount ?? '—'}</td>
                         <td className="td-muted td-date">{r.createdAt ? format(parseTs(r.createdAt), 'MMM d, yyyy') : '—'}</td>
                         <td className="td-muted td-date">{r.lastMessageAt ? format(parseTs(r.lastMessageAt), 'MMM d, yyyy') : 'No messages'}</td>
                         <td>
-                          <button className="admin-act-btn danger icon-btn" onClick={() => setConfirmRoomDelete({ roomId: r.roomId, name: r.name || 'this room' })}>
+                          <button className="admin-act-btn danger" onClick={() => setConfirmRoomDelete({ roomId: r.roomId, name: r.name || 'this room' })}>
                             <Trash2 size={12} /> Delete
                           </button>
                         </td>
