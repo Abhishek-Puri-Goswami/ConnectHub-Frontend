@@ -77,8 +77,14 @@ export default function Sidebar({ wsConnected, onAnnouncementOpen }) {
   const [createTab, setCreateTab] = useState('dm')
   const [showProfile, setShowProfile] = useState(false)
   const [menuOpen, setMenuOpen] = useState(false)
-  // Normalize legacy "PRO" plan name to "PREMIUM" for display
-  const rawPlan   = subscription?.plan || (user?.subscriptionTier) || 'FREE'
+  // Role always wins: PLATFORM_ADMIN → PLATINUM, ADMIN → PREMIUM.
+  // For regular users fall back to subscription record, then JWT claim, then FREE.
+  // Normalize legacy "PRO" plan name to "PREMIUM" for display.
+  const rawPlan = userRole === 'PLATFORM_ADMIN'
+    ? 'PLATINUM'
+    : userRole === 'ADMIN'
+      ? 'PREMIUM'
+      : (subscription?.plan || user?.subscriptionTier || 'FREE')
   const plan      = rawPlan === 'PRO' ? 'PREMIUM' : rawPlan
   const planLabel = plan === 'PLATINUM' ? 'Platinum' : plan === 'PREMIUM' ? 'Premium' : 'Free'
   const PlanIcon  = plan === 'PLATINUM' ? Crown : plan === 'PREMIUM' ? Zap : Package
