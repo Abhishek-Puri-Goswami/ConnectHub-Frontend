@@ -5,9 +5,10 @@
 .admin-page {
   display: flex;
   flex-direction: column;
-  height: 100vh;
-  max-height: 100vh;
-  padding: 14px 22px;
+  /* fixed+inset:0 is immune to iOS Safari's dynamic address-bar viewport quirk */
+  position: fixed;
+  inset: 0;
+  padding: calc(14px + env(safe-area-inset-top, 0px)) 22px 14px;
   overflow: hidden;
   background: var(--bg);
   gap: 10px;

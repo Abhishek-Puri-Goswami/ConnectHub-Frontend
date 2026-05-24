@@ -1,9 +1,16 @@
 /* ─── ChatLayout — 2-column claymorphism shell ──────────────────── */
 .chat-layout {
-  position: relative;
+  /*
+   * position: fixed + inset: 0 locks the shell to the *visible* viewport.
+   * On iOS Safari the dynamic address bar causes 100vh to exceed the visible
+   * area, pushing the chat header off-screen. fixed+inset:0 is immune to
+   * that because it always tracks the current rendered viewport.
+   */
+  position: fixed;
+  inset: 0;
+  /* Safe-area inset so content clears the notch / Dynamic Island */
+  padding-top: env(safe-area-inset-top, 0px);
   display: flex;
-  height: 100vh;
-  width: 100%;
   background:
     radial-gradient(900px 500px at 10% 0%, var(--primary-soft) 0%, transparent 55%),
     radial-gradient(800px 500px at 100% 100%, var(--accent-soft) 0%, transparent 55%),
@@ -62,8 +69,9 @@
   .sidebar-container {
     position: fixed;
     top: 0; left: 0; bottom: 0;
+    /* Respect notch on the sidebar drawer too */
+    padding: calc(12px + env(safe-area-inset-top, 0px)) 12px 12px;
     width: min(320px, 85vw);
-    padding: 12px;
     transform: translateX(-110%);
     transition: transform 0.28s var(--ease-out);
     z-index: 100;
