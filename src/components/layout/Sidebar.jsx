@@ -160,6 +160,7 @@ export default function Sidebar({ wsConnected, onAnnouncementOpen }) {
   const handleLogout = async () => {
     try { await api.logout() } catch {}
     clearAuth()
+    navigate('/')
   }
 
   return (

@@ -1,7 +1,11 @@
 /* ─── HomePage.css ────────────────────────────────────────────────────────── */
 
 .home-container {
-  min-height: 100vh;
+  /* position:fixed + inset:0 creates an independent scroll context,
+     bypassing html/body/root overflow:hidden that the chat app sets.
+     overflow-y:auto makes the page itself scrollable. */
+  position: fixed;
+  inset: 0;
   display: flex;
   flex-direction: column;
   overflow-y: auto;
