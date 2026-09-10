@@ -91,7 +91,7 @@ export default function EmptyState() {
             </div>
             <div>
               <div className="empty-feature-title">Secure &amp; private</div>
-              <div className="empty-feature-sub">Encrypted sessions with OAuth2</div>
+              <div className="empty-feature-sub">OAuth2 sign-in, encrypted in transit</div>
             </div>
           </div>
         </div>
