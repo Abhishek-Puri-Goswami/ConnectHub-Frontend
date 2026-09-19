@@ -41,6 +41,7 @@ import { usePresenceStore } from '../../store/presenceStore'
 import { useIdleDetector } from '../../hooks/useIdleDetector'
 import { api } from '../../services/api'
 import { ws } from '../../services/websocket'
+import { keepMediaSessionAlive } from '../../services/mediaSession'
 import { initForegroundListener } from '../../services/firebase'
 import Sidebar from './Sidebar'
 import ChatArea from '../chat/ChatArea'
@@ -72,6 +73,15 @@ export default function ChatLayout() {
     })
     return () => { if (unsubscribe) unsubscribe() }
   }, [])
+
+  /*
+   * Media session: lets <img>/<video> load chat files and avatars (they are served behind a
+   * short-lived cookie because such tags cannot send an Authorization header).
+   */
+  useEffect(() => {
+    if (!user) return undefined
+    return keepMediaSessionAlive()
+  }, [user])
 
   /*
    * Fetch the user's subscription tier once on login.
