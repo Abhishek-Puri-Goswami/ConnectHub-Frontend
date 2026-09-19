@@ -35,12 +35,13 @@
  */
 import { Client } from "@stomp/stompjs";
 import SockJS from "sockjs-client/dist/sockjs";
+import { toSockJsUrl } from "../utils/sockjsUrl";
 
-// Previous default (dev localhost, prod same-origin):
-// const WS_ENDPOINT = import.meta.env.DEV ? "http://localhost:8080/ws" : "/ws"
-const WS_ENDPOINT =
+// SockJS needs an http(s):// URL; toSockJsUrl also accepts ws:// / wss:// in VITE_WS_URL.
+const WS_ENDPOINT = toSockJsUrl(
   import.meta.env.VITE_WS_URL ||
-  (import.meta.env.DEV ? "http://localhost:8080/ws" : "/ws");
+    (import.meta.env.DEV ? "http://localhost:8080/ws" : "/ws")
+);
 
 class WebSocketService {
   /*
