@@ -46,7 +46,7 @@ const INITIAL_STATE = {
   loading: false,
   error: null,
   upgradeModalOpen: false,
-  upgradeModalPlan: 'PLATINUM',
+  upgradeModalPlan: 'PREMIUM',
   razorpayReady: false,
 }
 
@@ -69,9 +69,9 @@ describe('openUpgradeModal', () => {
     expect(getState().upgradeModalOpen).toBe(true)
   })
 
-  it('defaults to PLATINUM plan when no plan is specified', () => {
+  it('defaults to the one paid plan (PREMIUM checkout key, shown as Pro) when no plan is specified', () => {
     getState().openUpgradeModal()
-    expect(getState().upgradeModalPlan).toBe('PLATINUM')
+    expect(getState().upgradeModalPlan).toBe('PREMIUM')
   })
 
   it('uses the specified plan when provided', () => {

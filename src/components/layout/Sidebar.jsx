@@ -86,7 +86,7 @@ export default function Sidebar({ wsConnected, onAnnouncementOpen }) {
       ? 'PREMIUM'
       : (subscription?.plan || user?.subscriptionTier || 'FREE')
   const plan      = rawPlan === 'PRO' ? 'PREMIUM' : rawPlan
-  const planLabel = plan === 'PLATINUM' ? 'Platinum' : plan === 'PREMIUM' ? 'Premium' : 'Free'
+  const planLabel = plan === 'PLATINUM' || plan === 'PREMIUM' ? 'Pro' : 'Free' // both paid names have the same limits
   const PlanIcon  = plan === 'PLATINUM' ? Crown : plan === 'PREMIUM' ? Zap : Package
   const [statusPickerOpen, setStatusPickerOpen] = useState(false)
   const [dmExpanded, setDmExpanded] = useState(true)

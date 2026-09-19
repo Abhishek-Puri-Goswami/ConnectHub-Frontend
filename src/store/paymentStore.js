@@ -45,12 +45,12 @@ export const usePaymentStore = create((set, get) => ({
   loading: false,
   error: null,
   upgradeModalOpen: false,
-  upgradeModalPlan: 'PLATINUM',
+  upgradeModalPlan: 'PREMIUM',
   razorpayReady: false,
 
   /* openUpgradeModal(plan?) — opens the upgrade modal, optionally pre-selecting a plan.
-   * If no plan is passed, defaults to PLATINUM (the highlighted/recommended tier). */
-  openUpgradeModal: (plan) => set({ upgradeModalOpen: true, upgradeModalPlan: plan || 'PLATINUM' }),
+   * If no plan is passed, defaults to PREMIUM (the one paid plan on sale, shown as "Pro"). */
+  openUpgradeModal: (plan) => set({ upgradeModalOpen: true, upgradeModalPlan: plan || 'PREMIUM' }),
   closeUpgradeModal: () => set({ upgradeModalOpen: false }),
 
   /*

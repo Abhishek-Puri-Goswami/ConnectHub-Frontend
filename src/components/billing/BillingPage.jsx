@@ -7,7 +7,9 @@
  *   and a full table of past payments. It also lets FREE users upgrade by opening
  *   the UpgradeModal via the paymentStore.
  *
- * Plan tiers: FREE | PREMIUM (₹100) | PLATINUM (₹149)
+ * Plans: Free and Pro (₹100/month). The backend still reports PREMIUM / PLATINUM for paid users
+ * (billing history, admin-granted roles); both have the same limits, shown here as "Pro".
+ * Limits come from utils/plans.js, which mirrors what the backend enforces.
  *
  * Layout:
  *   Top 2-col — Left: active plan card + plan comparison row
@@ -21,61 +23,39 @@ import { useAuthStore } from '../../store/authStore'
 import UpgradeModal from '../chat/UpgradeModal'
 import {
   CreditCard, ArrowLeft, Zap, Check, Loader2,
-  Receipt, Calendar, Clock, Star, Shield, Package, Crown, XCircle,
+  Receipt, Calendar, Clock, Star, Shield, Package, XCircle,
 } from 'lucide-react'
 import { format } from 'date-fns'
+import { PRO_PLAN, featureList, isPaidPlan } from '../../utils/plans'
 import './BillingPage.css'
 
-/* ─── Plan tier definitions ─────────────────────────────────── */
+/* ─── Plan definitions (limits: utils/plans.js) ─────────────── */
 const TIERS = [
   {
     key: 'FREE',
+    css: 'free',
     label: 'Free',
     price: '₹0',
     period: 'forever',
     icon: <Package size={14} />,
-    features: ['5 messages/min', '100 MB storage', '5 group chats'],
+    features: featureList('FREE'),
   },
   {
-    key: 'PREMIUM',
-    label: 'Premium',
-    price: '₹100',
-    period: '/month',
+    key: 'PRO',
+    css: 'premium',
+    label: PRO_PLAN.name,
+    price: PRO_PLAN.price,
+    period: PRO_PLAN.period,
     icon: <Zap size={14} />,
-    features: ['10 messages/min', '4 GB storage', '10 group chats', '90-day history'],
-  },
-  {
-    key: 'PLATINUM',
-    label: 'Platinum',
-    price: '₹149',
-    period: '/month',
-    icon: <Crown size={14} />,
-    features: ['25 messages/min', '8 GB storage', '25 group chats', '90-day history'],
+    features: featureList('PRO'),
   },
 ]
 
 /* Feature tag variants for the active plan card */
-const FREE_FEATURES    = [
-  { label: '5 messages/min', variant: '' },
-  { label: '100MB media storage', variant: 'secondary' },
-  { label: 'Up to 5 group chats', variant: 'accent' },
-]
-const PREMIUM_FEATURES = [
-  { label: '10 messages/min', variant: '' },
-  { label: '4GB media storage', variant: 'secondary' },
-  { label: '10 group chats', variant: 'accent' },
-  { label: '10 media uploads/min', variant: 'secondary' },
-  { label: '90-day message history', variant: '' },
-  { label: 'Priority support', variant: '' },
-]
-const PLATINUM_FEATURES = [
-  { label: '25 messages/min', variant: '' },
-  { label: '8GB media storage', variant: 'secondary' },
-  { label: '25 group chats', variant: 'accent' },
-  { label: '25 media uploads/min', variant: 'secondary' },
-  { label: '90-day message history', variant: '' },
-  { label: 'Priority support', variant: '' },
-]
+const VARIANTS = ['', 'secondary', 'accent', 'secondary', '', '']
+const tagsFor = (tier) => featureList(tier).map((label, i) => ({ label, variant: VARIANTS[i] || '' }))
+const FREE_FEATURES = tagsFor('FREE')
+const PRO_FEATURES  = tagsFor('PRO')
 
 export default function BillingPage() {
   const navigate = useNavigate()
@@ -98,30 +78,24 @@ export default function BillingPage() {
   const isProUser    = isPro()
   const userRole     = (user?.role || '').toUpperCase()
 
-  // PLATFORM_ADMIN always has complimentary Platinum; ADMIN always has Premium.
-  // For regular users: read from subscription record (normalize legacy "PRO" → "PREMIUM").
-  const rawPlan = userRole === 'PLATFORM_ADMIN'
-    ? 'PLATINUM'
-    : userRole === 'ADMIN'
-      ? 'PREMIUM'
-      : (subscription?.plan === 'PRO' ? 'PREMIUM' : (subscription?.plan || 'FREE'))
-  const plan         = rawPlan
-  const status       = (userRole === 'PLATFORM_ADMIN' || userRole === 'ADMIN')
-    ? 'ACTIVE'
-    : (subscription?.status || 'ACTIVE').toUpperCase()
+  // PLATFORM_ADMIN / ADMIN always have the paid limits, free of charge. Everyone else: the subscription record
+  // (PREMIUM / PLATINUM / legacy PRO are all the paid plan; only FREE is not).
+  const isStaff      = userRole === 'PLATFORM_ADMIN' || userRole === 'ADMIN'
+  const plan         = isStaff ? 'PRO' : (isPaidPlan(subscription?.plan) ? 'PRO' : 'FREE')
+  const status       = isStaff ? 'ACTIVE' : (subscription?.status || 'ACTIVE').toUpperCase()
   const isCancelled  = status === 'CANCELLED'
   const isHalted     = status === 'HALTED'
-  const isPlatinum   = plan === 'PLATINUM'
-  const isPremium    = plan === 'PREMIUM'
+  const isPaid       = plan === 'PRO'
   const isRecurring  = !!(subscription?.razorpaySubscriptionId || subscription?.razorpayOrderId)
 
-  const planDisplayName = isPlatinum ? 'Platinum' : isPremium ? 'Premium' : 'Free Plan'
-  const planPrice       = isPlatinum
-    ? (userRole === 'PLATFORM_ADMIN' ? '₹0' : '₹149')
-    : isPremium
-      ? (userRole === 'ADMIN' ? '₹0' : '₹100')
+  const planDisplayName = isPaid ? PRO_PLAN.name : 'Free Plan'
+  // Show what this user actually pays (a legacy Platinum subscriber still pays ₹149)
+  const planPrice       = isStaff
+    ? '₹0'
+    : isPaid
+      ? ((subscription?.plan || '').toUpperCase() === 'PLATINUM' ? '₹149' : PRO_PLAN.price)
       : '₹0'
-  const features        = isPlatinum ? PLATINUM_FEATURES : isPremium ? PREMIUM_FEATURES : FREE_FEATURES
+  const features        = isPaid ? PRO_FEATURES : FREE_FEATURES
 
   const handleCancel = async () => {
     setCancelling(true); setCancelError(null)
@@ -157,19 +131,14 @@ export default function BillingPage() {
         <div className="billing-left">
 
           {/* Active plan card */}
-          <div className={`billing-plan-card ${isPlatinum ? 'platinum' : isProUser ? 'pro' : ''}`}>
+          <div className={`billing-plan-card ${isPaid ? 'pro' : ''}`}>
             <div className="billing-plan-card-top">
               <div className="billing-plan-card-left">
                 <div className="billing-plan-name">
-                  {isPlatinum ? <Crown size={16}/> : isProUser ? <Zap size={16}/> : <Package size={16}/>}
+                  {isPaid ? <Zap size={16}/> : <Package size={16}/>}
                   {planDisplayName}
                   <span className="billing-plan-badge current-badge">Current</span>
-                  {(isPremium || isPlatinum) && (
-                    <span className={`billing-plan-badge ${isPlatinum ? 'platinum' : 'pro'}`}>
-                      {isPlatinum ? 'Platinum' : 'Premium'}
-                    </span>
-                  )}
-                  {(isPremium || isPlatinum) && (
+                  {isPaid && (
                     <span className={`billing-plan-badge ${status === 'ACTIVE' ? 'active' : status === 'CANCELLED' ? 'cancelled' : status === 'HALTED' ? 'halted' : 'pending-badge'}`}>
                       {status === 'ACTIVE' ? 'Active' : status === 'CANCELLED' ? 'Cancelled' : status === 'HALTED' ? 'Payment failed' : status}
                     </span>
@@ -177,7 +146,7 @@ export default function BillingPage() {
                 </div>
                 <div className="billing-plan-price">
                   <strong>{planPrice}</strong>
-                  {(userRole === 'PLATFORM_ADMIN' || userRole === 'ADMIN')
+                  {isStaff
                     ? <span className="billing-price-sub"> · complimentary — included with your role</span>
                     : isProUser
                       ? <span className="billing-price-sub">/month · auto-renews</span>
@@ -198,12 +167,12 @@ export default function BillingPage() {
 
               <div className="billing-plan-actions">
                 {!isProUser && (
-                  <button className="billing-upgrade-btn" onClick={() => openUpgradeModal('PLATINUM')}>
+                  <button className="billing-upgrade-btn" onClick={() => openUpgradeModal(PRO_PLAN.checkoutPlan)}>
                     <Zap size={14}/> Upgrade Plan
                   </button>
                 )}
                 {isCancelled && (
-                  <button className="billing-upgrade-btn" onClick={() => openUpgradeModal(plan)}>
+                  <button className="billing-upgrade-btn" onClick={() => openUpgradeModal(PRO_PLAN.checkoutPlan)}>
                     <Zap size={14}/> Resubscribe
                   </button>
                 )}
@@ -256,7 +225,7 @@ export default function BillingPage() {
             {TIERS.map(tier => {
               const isActive = plan === tier.key
               return (
-                <div key={tier.key} className={`billing-tier-card ${isActive ? 'active' : ''} ${tier.key.toLowerCase()}`}>
+                <div key={tier.key} className={`billing-tier-card ${isActive ? 'active' : ''} ${tier.css}`}>
                   <div className="billing-tier-header">
                     <span className="billing-tier-icon">{tier.icon}</span>
                     <span className="billing-tier-name">{tier.label}</span>
@@ -273,8 +242,8 @@ export default function BillingPage() {
                   </ul>
                   {!isActive && tier.key !== 'FREE' && (
                     <button
-                      className={`billing-tier-btn ${tier.key.toLowerCase()}`}
-                      onClick={() => openUpgradeModal(tier.key)}
+                      className={`billing-tier-btn ${tier.css}`}
+                      onClick={() => openUpgradeModal(PRO_PLAN.checkoutPlan)}
                     >
                       Get {tier.label}
                     </button>
@@ -346,17 +315,17 @@ export default function BillingPage() {
                 </tr>
               </thead>
               <tbody>
-                {/* Paid plan activation row — only for PREMIUM / PLATINUM users */}
+                {/* Paid plan activation row — only for paid (Pro) users */}
                 {isProUser && (
-                  <tr className={`billing-plan-activation-row ${isPlatinum ? 'platinum' : 'premium'}`}>
+                  <tr className={`billing-plan-activation-row premium`}>
                     <td>
                       {subscription?.startDate
                         ? format(new Date(subscription.startDate), 'MMM d, yyyy')
                         : '—'}
                     </td>
                     <td>
-                      <span className={`billing-desc-plan ${isPlatinum ? 'platinum' : 'premium'}`}>
-                        {isPlatinum ? <Crown size={11}/> : <Zap size={11}/>}
+                      <span className={`billing-desc-plan premium`}>
+                        <Zap size={11}/>
                         {planDisplayName}
                       </span>
                     </td>

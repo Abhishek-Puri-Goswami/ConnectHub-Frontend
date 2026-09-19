@@ -1,42 +1,22 @@
 import { useState, useEffect, useRef } from 'react'
 import { createPortal } from 'react-dom'
-import { Zap, X, Check, Loader2, CreditCard, ShieldCheck, Crown } from 'lucide-react'
+import { Zap, X, Check, Loader2, CreditCard, ShieldCheck } from 'lucide-react'
 import { usePaymentStore } from '../../store/paymentStore'
 import { useAuthStore } from '../../store/authStore'
+import { PRO_PLAN, featureList } from '../../utils/plans'
 import './UpgradeModal.css'
 
+// One paid plan is sold. Its id is the plan key payment-service expects (Premium, ₹100/month); the limits are the
+// ones the backend enforces for every paid subscriber (utils/plans.js).
 const PLANS = [
   {
-    id: 'PREMIUM',
-    name: 'Premium',
-    price: '₹100',
-    period: '/month',
+    id: PRO_PLAN.checkoutPlan,
+    name: PRO_PLAN.name,
+    price: PRO_PLAN.price,
+    period: PRO_PLAN.period,
     badge: null,
     color: '#7C3AED',
-    features: [
-      '10 messages/min',
-      '4 GB media storage',
-      '10 group chats',
-      '10 media uploads/min',
-      '90-day message history',
-      'Priority support',
-    ],
-  },
-  {
-    id: 'PLATINUM',
-    name: 'Platinum',
-    price: '₹149',
-    period: '/month',
-    badge: 'POPULAR',
-    color: '#D97706',
-    features: [
-      '25 messages/min',
-      '8 GB media storage',
-      '25 group chats',
-      '25 media uploads/min',
-      '90-day message history',
-      'Priority support',
-    ],
+    features: featureList('PRO'),
   },
 ]
 
@@ -46,11 +26,11 @@ export default function UpgradeModal({ isOpen, onClose, message }) {
     initiateCheckout, loading, error, subscription, fetchSubscription, upgradeModalPlan,
   } = usePaymentStore()
 
-  const [selectedPlan, setSelectedPlan] = useState('PLATINUM')
+  const [selectedPlan, setSelectedPlan] = useState(PRO_PLAN.checkoutPlan)
 
   /* Sync the selected plan card whenever the modal is opened with a specific plan */
   useEffect(() => {
-    if (isOpen && upgradeModalPlan) setSelectedPlan(upgradeModalPlan)
+    if (isOpen) setSelectedPlan(PLANS.some(p => p.id === upgradeModalPlan) ? upgradeModalPlan : PRO_PLAN.checkoutPlan)
   }, [isOpen, upgradeModalPlan])
   const [step, setStep] = useState('idle')
   const [localError, setLocalError] = useState(null)
@@ -121,23 +101,18 @@ export default function UpgradeModal({ isOpen, onClose, message }) {
 
   // Already-subscribed view (but not during success animation)
   if (hasSubscription && step !== 'success') {
-    // PLATFORM_ADMIN always has Platinum; ADMIN always has Premium;
-    // regular users show whatever plan the subscription record says.
-    const effectivePlan = userRole === 'PLATFORM_ADMIN'
-      ? 'PLATINUM'
-      : (userRole === 'ADMIN' ? 'PREMIUM' : (subscription?.plan || 'PREMIUM'))
-    const planName = effectivePlan === 'PLATINUM' ? 'Platinum' : 'Premium'
+    const planName = PRO_PLAN.name
     return createPortal(
       <div className="upgrade-overlay" onClick={onClose}>
         <div role="dialog" className="upgrade-card" onClick={e => e.stopPropagation()}>
           <button className="upgrade-close" onClick={onClose}><X size={18}/></button>
-          <div className={`upgrade-pro-badge ${effectivePlan === 'PLATINUM' ? 'platinum' : ''}`}>
-            {effectivePlan === 'PLATINUM' ? <Crown size={20}/> : <Zap size={20}/>} {planName}
+          <div className="upgrade-pro-badge">
+            <Zap size={20}/> {planName}
           </div>
           <h2 className="upgrade-title">You're on {planName}! 🎉</h2>
           <p className="upgrade-sub">
             {userRole === 'PLATFORM_ADMIN'
-              ? 'Platform Admins have Platinum access included — no payment needed.'
+              ? 'Platform Admins have Pro access included — no payment needed.'
               : 'Enjoy higher limits, expanded storage, and more groups.'}
           </p>
         </div>
@@ -220,7 +195,7 @@ export default function UpgradeModal({ isOpen, onClose, message }) {
             <div className="upgrade-hero">
               <h2 className="upgrade-title">Choose Your Plan</h2>
               {message && <p className="upgrade-reason">{message}</p>}
-              <p className="upgrade-subtitle">Unlock premium features and higher limits</p>
+              <p className="upgrade-subtitle">Higher limits for groups, members and storage</p>
             </div>
 
             {/* Plan cards */}
@@ -233,7 +208,7 @@ export default function UpgradeModal({ isOpen, onClose, message }) {
                 >
                   {plan.badge && <span className="upgrade-plan-badge">{plan.badge}</span>}
                   <div className="upgrade-plan-header">
-                    {plan.id === 'PLATINUM' ? <Crown size={20}/> : <Zap size={20}/>}
+                    <Zap size={20}/>
                     <span className="upgrade-plan-name">{plan.name}</span>
                   </div>
                   <div className="upgrade-plan-price">
@@ -259,13 +234,13 @@ export default function UpgradeModal({ isOpen, onClose, message }) {
             )}
 
             <button
-              className={`upgrade-btn ${selectedPlan === 'PLATINUM' ? 'platinum' : ''}`}
+              className="upgrade-btn"
               onClick={handleUpgrade}
               disabled={step === 'processing' || loading}
             >
               {(step === 'processing' || loading)
                 ? <><Loader2 size={16} className="spin"/> Processing…</>
-                : <>{selectedPlan === 'PLATINUM' ? <Crown size={15}/> : <Zap size={15}/>} Unlock {activePlan.name} · {activePlan.price}/mo</>
+                : <><Zap size={15}/> Unlock {activePlan.name} · {activePlan.price}/mo</>
               }
             </button>
 
