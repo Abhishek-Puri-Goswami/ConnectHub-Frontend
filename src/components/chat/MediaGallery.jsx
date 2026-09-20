@@ -97,7 +97,7 @@ export default function MediaGallery({ roomId, onClose }) {
     try {
       await api.deleteMedia(item.mediaId)
       setMedia(prev => prev.filter(m => m.mediaId !== item.mediaId))
-    } catch {}
+    } catch { /* api.req already showed the error toast; the file stays listed */ }
   }
 
   /*

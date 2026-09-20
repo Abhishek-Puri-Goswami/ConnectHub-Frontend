@@ -7,7 +7,8 @@ export default defineConfig({
   fullyParallel: true,
   forbidOnly: isCI,
   retries: isCI ? 2 : 0,
-  workers: isCI ? 1 : undefined,
+  // Locally three browser projects run side by side; more than 2 workers made Firefox time out under load
+  workers: isCI ? 1 : 2,
   reporter: [['html', { open: 'never' }], ['list']],
 
   use: {

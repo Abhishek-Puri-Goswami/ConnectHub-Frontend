@@ -284,7 +284,7 @@ class WebSocketService {
                 }),
               );
             }
-          } catch (e) {}
+          } catch (e) { console.warn("[WS] Ignoring malformed frame", e); }
         }),
       );
       subs.push(
@@ -293,7 +293,7 @@ class WebSocketService {
           (msg) => {
             try {
               callback({ type: "delivery-ack", ...JSON.parse(msg.body) });
-            } catch (e) {}
+            } catch (e) { console.warn("[WS] Ignoring malformed frame", e); }
           },
         ),
       );
@@ -503,7 +503,7 @@ class WebSocketService {
                 }),
               );
             }
-          } catch (e) {}
+          } catch (e) { console.warn("[WS] Ignoring malformed frame", e); }
         }),
       );
       subs.push(
@@ -512,7 +512,7 @@ class WebSocketService {
           (msg) => {
             try {
               callback({ type: "delivery-ack", ...JSON.parse(msg.body) });
-            } catch (e) {}
+            } catch (e) { console.warn("[WS] Ignoring malformed frame", e); }
           },
         ),
       );
@@ -542,7 +542,7 @@ class WebSocketService {
     this.broadcastSubscription = this.client.subscribe("/topic/broadcast", (msg) => {
       try {
         window.dispatchEvent(new CustomEvent("platformBroadcast", { detail: JSON.parse(msg.body) }));
-      } catch (e) {}
+      } catch (e) { console.warn("[WS] Ignoring malformed frame", e); }
     });
   }
 

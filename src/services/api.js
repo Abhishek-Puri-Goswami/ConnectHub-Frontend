@@ -545,7 +545,7 @@ class ApiService {
    *                            badges on room names in the sidebar.
    */
   getNotifications(uid) {
-    return this.req("GET", "/notifications/user/" + uid);
+    return this.req("GET", "/notifications/user/" + uid, null, true, true); // polled: quiet
   }
   markNotifRead(id) {
     return this.req("PUT", "/notifications/" + id + "/read");
@@ -557,7 +557,7 @@ class ApiService {
     return this.req("DELETE", "/notifications/" + id);
   }
   getUnreadCount(uid) {
-    return this.req("GET", "/notifications/user/" + uid + "/unread-count");
+    return this.req("GET", "/notifications/user/" + uid + "/unread-count", null, true, true); // polled: quiet
   }
   getWsUnreadCounts(uid) {
     return this.req("GET", "/ws/unread/" + uid);

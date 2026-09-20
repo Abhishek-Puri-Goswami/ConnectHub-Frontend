@@ -30,20 +30,25 @@ const SECOND_ADMIN_USER = {
   email: 'admin2@example.com',
 }
 
+// Same shape as auth-service's AuditLog entity (what GET /auth/admin/audit really returns)
 const AUDIT_LOGS = [
   {
-    id: 'log-1',
-    actorName: 'Admin User',
-    action: 'SUSPEND',
-    targetName: 'Suspended User',
+    auditId: 1,
+    actorId: 'admin-1', // MOCK_ADMIN_USER, shown as "Admin User"
+    action: 'USER_SUSPEND',
+    entityType: 'USER',
+    entityId: 'user-3',
+    details: 'Suspended: suspended_user',
     ipAddress: '127.0.0.1',
     createdAt: '2024-04-01T10:00:00Z',
   },
   {
-    id: 'log-2',
-    actorName: 'Admin User',
-    action: 'REACTIVATE',
-    targetName: 'Suspended User',
+    auditId: 2,
+    actorId: 'admin-1',
+    action: 'USER_REACTIVATE',
+    entityType: 'USER',
+    entityId: 'user-3',
+    details: 'Reactivated: suspended_user',
     ipAddress: '127.0.0.1',
     createdAt: '2024-04-02T10:00:00Z',
   },
@@ -136,11 +141,12 @@ test.describe('Admin Dashboard', () => {
   test('shows stats cards at the top (total, active, suspended, admins)', async ({ page }) => {
     await gotoAdmin(page)
 
-    const stats = page.locator('.admin-stats')
-    await expect(stats.getByText(/Total Users?/i)).toBeVisible()
-    await expect(stats.getByText(/Active/i)).toBeVisible()
-    await expect(stats.getByText(/Suspended/i)).toBeVisible()
-    await expect(stats.getByText(/Admin/i)).toBeVisible()
+    const stats = page.locator('.admin-stats-strip')
+    // 4 users are mocked: 1 regular, 2 admins, 1 suspended
+    for (const label of ['Users', 'Active', 'Suspended', 'Admins']) {
+      await expect(stats.locator('.asp-label', { hasText: new RegExp('^' + label + '$') })).toBeVisible()
+    }
+    await expect(stats.locator('.admin-stat-pill').filter({ hasText: 'Users' }).locator('.asp-value')).toHaveText('4')
   })
 
   // ── User search ───────────────────────────────────────────────────────────
@@ -256,7 +262,7 @@ test.describe('Admin Dashboard', () => {
     )
     await auditTab.click()
 
-    await expect(page.getByText(/Actor|Action|Target/i).first()).toBeVisible()
+    await expect(page.locator('.audit-entry')).toHaveCount(2)
   })
 
   test('shows audit log entries', async ({ page }) => {
@@ -267,9 +273,12 @@ test.describe('Admin Dashboard', () => {
     )
     await auditTab.click()
 
-    await expect(page.getByText('Admin User').first()).toBeVisible()
-    await expect(page.getByText(/SUSPEND|Suspend/i).first()).toBeVisible()
-    await expect(page.getByText(/REACTIVATE|Reactivate/i).first()).toBeVisible()
+    const entries = page.locator('.audit-entry')
+    await expect(entries.filter({ hasText: 'User Suspended' })).toHaveCount(1)
+    await expect(entries.filter({ hasText: 'User Reactivated' })).toHaveCount(1)
+    // the actor id is resolved to the admin's name, and the details line is shown
+    await expect(entries.first().locator('.audit-meta')).toContainText('Admin User')
+    await expect(entries.filter({ hasText: 'User Suspended' })).toContainText('Suspended: suspended_user')
   })
 
   test('shows IP address in audit log entries', async ({ page }) => {

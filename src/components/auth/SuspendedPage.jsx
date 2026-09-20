@@ -6,7 +6,7 @@ export default function SuspendedPage() {
   const { clearAuth } = useAuthStore()
 
   const handleLogout = async () => {
-    try { await api.logout() } catch {}
+    try { await api.logout() } catch { /* best-effort: the local session is cleared regardless */ }
     clearAuth()
   }
 

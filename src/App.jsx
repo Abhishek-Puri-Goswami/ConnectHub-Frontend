@@ -39,6 +39,7 @@ import ForgotPasswordPage from './components/auth/ForgotPasswordPage'
 import OAuth2CallbackPage from './components/auth/OAuth2CallbackPage'
 import SuspendedPage from './components/auth/SuspendedPage'
 import ToastContainer from './components/layout/ToastContainer'
+import BroadcastBanner from './components/common/BroadcastBanner'
 import HomePage from './components/marketing/HomePage'
 
 /*
@@ -94,6 +95,7 @@ export default function App() {
   return (
     <ThemeProvider>
       <ToastContainer />
+      <BroadcastBanner />
       <WebSocketKeepAlive />
       <BrowserRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
         <Suspense fallback={<div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100vh' }}>Loading…</div>}>

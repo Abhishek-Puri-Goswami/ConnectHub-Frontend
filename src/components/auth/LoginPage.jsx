@@ -205,7 +205,7 @@ export default function LoginPage() {
     } catch (err) {
       const msg = err.message || 'Could not send code'
       if (msg.toLowerCase().includes('not verified') || msg.toLowerCase().includes('email not verified')) {
-        try { await api.resendOtp(email) } catch {}
+        try { await api.resendOtp(email) } catch { /* best-effort: the user can press "Resend" */ }
         navigate('/verify-email', { state: { email } })
         return
       }
@@ -283,7 +283,7 @@ export default function LoginPage() {
     } catch (err) {
       const msg = err.message || ''
       if (msg.toLowerCase().includes('not verified')) {
-        try { await api.resendOtp(identifier) } catch {}
+        try { await api.resendOtp(identifier) } catch { /* best-effort: the user can press "Resend" */ }
         navigate('/verify-email', { state: { email: identifier } })
         return
       }

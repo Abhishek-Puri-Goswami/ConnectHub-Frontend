@@ -80,12 +80,12 @@ export default function NotificationCenter() {
       ])
       setNotifications(notifs)
       setUnreadCount(count)
-    } catch {}
+    } catch { /* background refresh: try again on the next poll */ }
   }
 
   /* loadUnreadCount — lightweight poll: only fetches the count, not the full list */
   const loadUnreadCount = async () => {
-    try { setUnreadCount(await api.getUnreadCount(user.userId)) } catch {}
+    try { setUnreadCount(await api.getUnreadCount(user.userId)) } catch { /* background refresh: try again on the next poll */ }
   }
 
   /*
@@ -118,7 +118,7 @@ export default function NotificationCenter() {
       await api.deleteNotif(id)
       setNotifications(prev => prev.filter(n => n.notificationId !== id))
       if (notif && !notif.isRead) setUnreadCount(c => Math.max(0, c - 1))
-    } catch {}
+    } catch { /* api.req already showed the error toast */ }
   }
 
   return (

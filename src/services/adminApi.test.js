@@ -1,5 +1,9 @@
 import { adminApi } from './adminApi'
 
+// The API base comes from VITE_API_BASE_URL when set (e.g. .env.local) and '/api/v1' otherwise. Tests must hold for
+// either, so URLs are built from the same base instead of hard-coding one.
+const API = import.meta.env.VITE_API_BASE_URL || '/api/v1'
+
 const mockResponse = (data, status = 200) => ({
   ok: status < 400,
   status,
@@ -137,7 +141,7 @@ describe('AdminApiService.req()', () => {
     await adminApi.req('GET', '/auth/admin/users')
 
     const [url] = fetch.mock.calls[0]
-    expect(url).toBe('/api/v1/auth/admin/users')
+    expect(url).toBe(API + '/auth/admin/users')
   })
 })
 
@@ -148,7 +152,7 @@ describe('AdminApiService.getAllUsers()', () => {
     await adminApi.getAllUsers()
 
     const [url, config] = fetch.mock.calls[0]
-    expect(url).toBe('/api/v1/auth/admin/users')
+    expect(url).toBe(API + '/auth/admin/users')
     expect(config.method).toBe('GET')
   })
 })
@@ -160,7 +164,7 @@ describe('AdminApiService.suspendUser()', () => {
     await adminApi.suspendUser(42)
 
     const [url, config] = fetch.mock.calls[0]
-    expect(url).toBe('/api/v1/auth/admin/users/42/suspend')
+    expect(url).toBe(API + '/auth/admin/users/42/suspend')
     expect(config.method).toBe('PUT')
   })
 })
@@ -172,7 +176,7 @@ describe('AdminApiService.reactivateUser()', () => {
     await adminApi.reactivateUser(7)
 
     const [url, config] = fetch.mock.calls[0]
-    expect(url).toBe('/api/v1/auth/admin/users/7/reactivate')
+    expect(url).toBe(API + '/auth/admin/users/7/reactivate')
     expect(config.method).toBe('PUT')
   })
 })
@@ -184,7 +188,7 @@ describe('AdminApiService.deleteUser()', () => {
     const result = await adminApi.deleteUser(99)
 
     const [url, config] = fetch.mock.calls[0]
-    expect(url).toBe('/api/v1/auth/admin/users/99')
+    expect(url).toBe(API + '/auth/admin/users/99')
     expect(config.method).toBe('DELETE')
     expect(result).toBeNull()
   })
@@ -197,7 +201,7 @@ describe('AdminApiService.changeRole()', () => {
     await adminApi.changeRole(5, 'ADMIN')
 
     const [url, config] = fetch.mock.calls[0]
-    expect(url).toBe('/api/v1/auth/admin/users/5/role')
+    expect(url).toBe(API + '/auth/admin/users/5/role')
     expect(config.method).toBe('PUT')
     expect(JSON.parse(config.body)).toEqual({ role: 'ADMIN' })
   })
@@ -210,7 +214,7 @@ describe('AdminApiService.getAuditLogs()', () => {
     await adminApi.getAuditLogs()
 
     const [url, config] = fetch.mock.calls[0]
-    expect(url).toBe('/api/v1/auth/admin/audit?page=0&size=50')
+    expect(url).toBe(API + '/auth/admin/audit?page=0&size=50')
     expect(config.method).toBe('GET')
   })
 
@@ -220,7 +224,7 @@ describe('AdminApiService.getAuditLogs()', () => {
     await adminApi.getAuditLogs(3)
 
     const [url] = fetch.mock.calls[0]
-    expect(url).toBe('/api/v1/auth/admin/audit?page=3&size=50')
+    expect(url).toBe(API + '/auth/admin/audit?page=3&size=50')
   })
 })
 
@@ -231,7 +235,7 @@ describe('AdminApiService.getOnlineCount()', () => {
     await adminApi.getOnlineCount()
 
     const [url, config] = fetch.mock.calls[0]
-    expect(url).toBe('/api/v1/presence/online/count')
+    expect(url).toBe(API + '/presence/online/count')
     expect(config.method).toBe('GET')
   })
 })

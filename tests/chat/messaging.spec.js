@@ -9,9 +9,11 @@ import {
 
 const OLDER_MESSAGE = {
   ...MOCK_MESSAGE,
+  messageId: 'msg-old',
   id: 'msg-old',
   content: 'An older message',
-  createdAt: new Date(Date.now() - 86_400_000 * 2).toISOString(), // 2 days ago
+  sentAt: new Date(Date.now() - 86_400_000 * 2).toISOString(), // 2 days ago (the app groups by sentAt)
+  createdAt: new Date(Date.now() - 86_400_000 * 2).toISOString(),
 }
 
 /**
@@ -71,7 +73,8 @@ test.describe('Chat Messaging', () => {
   })
 
   test('renders existing messages in the chat area', async ({ page }) => {
-    await expect(page.getByText('Hello everyone!')).toBeVisible()
+    // the sidebar preview shows the same text, so scope to the chat area
+    await expect(page.locator('.ca').getByText('Hello everyone!')).toBeVisible()
   })
 
   test('shows sender name for messages', async ({ page }) => {

@@ -36,8 +36,8 @@ test.describe('Sidebar', () => {
 
   test('renders sidebar with Messages heading and action buttons', async ({ page }) => {
     await expect(page.getByRole('heading', { name: 'Messages' })).toBeVisible()
-    await expect(page.getByRole('button', { name: /Message/i })).toBeVisible()
-    await expect(page.getByRole('button', { name: /Group/i })).toBeVisible()
+    await expect(page.locator('.sb').getByRole('button', { name: 'New direct message' })).toBeVisible()
+    await expect(page.locator('.sb').getByRole('button', { name: 'New group' })).toBeVisible()
   })
 
   test('renders room list with seeded rooms', async ({ page }) => {
@@ -95,13 +95,13 @@ test.describe('Sidebar', () => {
   // ── Create DM modal ───────────────────────────────────────────────────────
 
   test('opens Create Room modal on Message button click', async ({ page }) => {
-    await page.getByRole('button', { name: /^Message$/i }).click()
+    await page.locator('.sb').getByRole('button', { name: 'New direct message' }).click()
     await expect(page.getByRole('dialog')).toBeVisible()
     await expect(page.getByText(/Direct message/i).first()).toBeVisible()
   })
 
   test('closes Create Room modal via Escape key', async ({ page }) => {
-    await page.getByRole('button', { name: /^Message$/i }).click()
+    await page.locator('.sb').getByRole('button', { name: 'New direct message' }).click()
     await expect(page.getByRole('dialog')).toBeVisible()
     await page.keyboard.press('Escape')
     await expect(page.getByRole('dialog')).not.toBeVisible()
@@ -110,7 +110,7 @@ test.describe('Sidebar', () => {
   test('searches for users in DM modal', async ({ page }) => {
     await mockUserSearch(page, [MOCK_USER])
 
-    await page.getByRole('button', { name: /^Message$/i }).click()
+    await page.locator('.sb').getByRole('button', { name: 'New direct message' }).click()
     const searchInput = page.getByRole('dialog').locator('input[placeholder*="Search"], input[type="text"]').first()
     await searchInput.fill('jane')
 
@@ -128,7 +128,7 @@ test.describe('Sidebar', () => {
       route.fulfill({ json: { success: true, data: [] } })
     })
 
-    await page.getByRole('button', { name: /^Message$/i }).click()
+    await page.locator('.sb').getByRole('button', { name: 'New direct message' }).click()
 
     const searchInput = page.getByRole('dialog').locator('input[placeholder*="Search"], input[type="text"]').first()
     await searchInput.fill('jane')
@@ -145,14 +145,14 @@ test.describe('Sidebar', () => {
   // ── Create Group modal ────────────────────────────────────────────────────
 
   test('opens Create Room modal on Group button click with group tab active', async ({ page }) => {
-    await page.getByRole('button', { name: /^Group$/i }).click()
+    await page.locator('.sb').getByRole('button', { name: 'New group' }).click()
     const dialog = page.getByRole('dialog')
     await expect(dialog).toBeVisible()
     await expect(dialog.getByText(/Channel|Group/i).first()).toBeVisible()
   })
 
   test('requires a room name for group creation', async ({ page }) => {
-    await page.getByRole('button', { name: /^Group$/i }).click()
+    await page.locator('.sb').getByRole('button', { name: 'New group' }).click()
 
     const createBtn = page.getByRole('dialog').getByRole('button', { name: /Create/i })
     await createBtn.click()

@@ -48,6 +48,7 @@ import { formatDistanceToNowStrict, isToday, isYesterday, format } from 'date-fn
 import CreateRoomModal from '../chat/CreateRoomModal'
 import ProfilePanel from '../chat/ProfilePanel'
 import ThemeToggle from '../../theme/ThemeToggle'
+import NotificationCenter from '../chat/NotificationCenter'
 import UpgradeModal from '../chat/UpgradeModal'
 import Avatar from '../common/Avatar'
 import { decodeHtml } from '../chat/MessageBubble'
@@ -164,7 +165,7 @@ export default function Sidebar({ wsConnected, onAnnouncementOpen }) {
 
   /* Logout: call the backend to invalidate the refresh token, then clear local state */
   const handleLogout = async () => {
-    try { await api.logout() } catch {}
+    try { await api.logout() } catch { /* best-effort: the local session is cleared regardless */ }
     clearAuth()
     navigate('/')
   }
@@ -177,6 +178,7 @@ export default function Sidebar({ wsConnected, onAnnouncementOpen }) {
         <div className="sb-head">
           <h1 className="sb-title">Messages</h1>
           <div className="sb-head-actions">
+            <NotificationCenter />
             <ThemeToggle compact />
             <button
               className="icon-btn"
@@ -453,7 +455,7 @@ const ConversationRow = memo(function ConversationRow({ room, active, unread, on
           setDmOtherId(other.userId)
           setDmAvatarUrl(other.avatarUrl)
         }
-      } catch {}
+      } catch { /* the header falls back to the room name */ }
     }
     resolve()
     return () => { cancelled = true }

@@ -659,7 +659,7 @@ export default function ProfilePanel({ onClose }) {
                   {sessions.map(s => {
                     const isCurrent = s.jti === currentJti
                     let loginAt = '—'
-                    try { loginAt = new Date(JSON.parse(s.metadata).loginAt).toLocaleString() } catch {}
+                    try { loginAt = new Date(JSON.parse(s.metadata).loginAt).toLocaleString() } catch { /* login time is optional metadata: show the session without it */ }
                     const expiry = formatExpiry(s.expiresInSeconds)
                     return (
                       <li key={s.jti} className={`session-item ${isCurrent ? 'session-current' : ''}`}>

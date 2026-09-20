@@ -19,9 +19,8 @@
  *   - Audit logs: paginated history of all admin actions (who did what and when)
  *
  * URL note:
- *   Uses VITE_API_BASE_URL (set at build time by CI) so requests reach the EC2
- *   API Gateway even when the frontend is hosted on Firebase Hosting (a different
- *   origin). Falls back to '/api/v1' for local dev where Vite's proxy handles it.
+ *   Uses VITE_API_BASE_URL (see .env.example; http://localhost:8080/api/v1 for the local stack) so requests reach
+ *   the api-gateway. Falls back to '/api/v1' (same-origin) when it is not set.
  */
 const API = import.meta.env.VITE_API_BASE_URL || '/api/v1'
 

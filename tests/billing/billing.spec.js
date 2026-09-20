@@ -5,6 +5,7 @@ import {
   MOCK_SUBSCRIPTION,
   MOCK_PRO_SUBSCRIPTION,
 } from '../helpers/api-mocks.js'
+import { featureList } from '../../src/utils/plans.js'
 
 async function gotoBilling(page, subscription = MOCK_SUBSCRIPTION, payments = []) {
   await seedAuth(page)
@@ -46,17 +47,20 @@ test.describe('Billing Page', () => {
   test('renders the billing page for a FREE plan user', async ({ page }) => {
     await gotoBilling(page, MOCK_SUBSCRIPTION)
 
-    await expect(page.locator('.billing-plan-badge.free')).toBeVisible()
-    await expect(page.getByRole('button', { name: /Upgrade to Premium/i })).toBeVisible()
+    const card = page.locator('.billing-plan-card').first()
+    await expect(card.getByText('Free Plan')).toBeVisible()
+    await expect(card.locator('.current-badge')).toBeVisible()
+    await expect(page.getByRole('button', { name: /Upgrade Plan/i })).toBeVisible()
   })
 
   test('shows FREE plan feature limits', async ({ page }) => {
     await gotoBilling(page, MOCK_SUBSCRIPTION)
 
-    // FREE plan features as described in BillingPage
-    await expect(page.getByText(/5 msg\/min|5 messages/i)).toBeVisible()
-    await expect(page.getByText(/100MB|100 MB/i)).toBeVisible()
-    await expect(page.getByText(/5 group|5 rooms/i)).toBeVisible()
+    // The numbers come from src/utils/plans.js, which mirrors what the backend enforces
+    const tags = page.locator('.billing-plan-features')
+    for (const feature of featureList('FREE')) await expect(tags.getByText(feature)).toBeVisible()
+    await expect(tags.getByText('5 group chats')).toBeVisible()
+    await expect(tags.getByText('100 MB media storage')).toBeVisible()
   })
 
   test('shows empty payment history for FREE user with no payments', async ({ page }) => {
@@ -73,18 +77,22 @@ test.describe('Billing Page', () => {
   test('renders the billing page for a PRO plan user', async ({ page }) => {
     await gotoBilling(page, MOCK_PRO_SUBSCRIPTION)
 
-    // plan='PREMIUM' → badge class is 'billing-plan-badge pro', text is 'PREMIUM'
-    await expect(page.locator('.billing-plan-badge.pro')).toBeVisible()
-    await expect(page.getByRole('button', { name: /Upgrade/i })).not.toBeVisible()
+    // Any paid backend plan (PREMIUM / PLATINUM) is shown as the single paid plan, "Pro"
+    const card = page.locator('.billing-plan-card.pro')
+    await expect(card).toBeVisible()
+    await expect(card.locator('.billing-plan-name')).toContainText('Pro')
+    await expect(page.getByRole('button', { name: /Upgrade Plan/i })).not.toBeVisible()
   })
 
   test('shows PRO plan feature limits', async ({ page }) => {
     await gotoBilling(page, MOCK_PRO_SUBSCRIPTION)
 
-    // PREMIUM plan features (BillingPage checks plan === 'PREMIUM')
-    await expect(page.getByText(/10 messages\/min|10 msg/i)).toBeVisible()
-    await expect(page.getByText(/4GB|4 GB/i)).toBeVisible()
-    await expect(page.getByText(/90-day|message history/i)).toBeVisible()
+    const tags = page.locator('.billing-plan-features')
+    for (const feature of featureList('PRO')) await expect(tags.getByText(feature)).toBeVisible()
+    await expect(tags.getByText('500 group chats')).toBeVisible()
+    await expect(tags.getByText('10 GB media storage')).toBeVisible()
+    // things that used to be advertised but were never enforced must not come back
+    await expect(page.getByText(/90-day|priority support/i)).toHaveCount(0)
   })
 
   test('shows subscription details for PRO user', async ({ page }) => {
@@ -125,28 +133,17 @@ test.describe('Billing Page', () => {
 
   // ── Upgrade modal ─────────────────────────────────────────────────────────
 
-  test('opens upgrade modal when Upgrade to PRO is clicked', async ({ page }) => {
+  test('opens the upgrade modal with the single Pro plan when Upgrade Plan is clicked', async ({ page }) => {
     await gotoBilling(page, MOCK_SUBSCRIPTION)
 
-    await page.route('**/api/v1/billing/create-subscription', (route) => {
-      route.fulfill({
-        json: {
-          success: true,
-          data: {
-            subscriptionId: 'razorpay-sub-1',
-            keyId: 'rzp_test_key',
-            plan: 'PRO',
-            amount: 49900,
-            currency: 'INR',
-          },
-        },
-      })
-    })
+    await page.getByRole('button', { name: /Upgrade Plan/i }).click()
 
-    await page.getByRole('button', { name: /Upgrade to Premium/i }).click()
-
-    // The upgrade modal should appear (upgrade form uses .upgrade-overlay, not role=dialog)
-    await expect(page.locator('.upgrade-overlay')).toBeVisible()
+    // The upgrade form uses .upgrade-overlay, not role=dialog
+    const overlay = page.locator('.upgrade-overlay')
+    await expect(overlay).toBeVisible()
+    await expect(overlay.getByText('Choose Your Plan')).toBeVisible()
+    await expect(overlay.locator('.upgrade-plan-card')).toHaveCount(1)
+    await expect(overlay.getByRole('button', { name: /Unlock Pro/i })).toBeVisible()
   })
 
   // ── Navigation ────────────────────────────────────────────────────────────

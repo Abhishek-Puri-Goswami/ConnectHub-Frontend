@@ -367,7 +367,7 @@ export default function AdminDashboard() {
         <div className="admin-stat-pill">
           <span className="asp-icon lavender"><Crown size={13} /></span>
           <span className="asp-value">{stats.pro}</span>
-          <span className="asp-label">Premium</span>
+          <span className="asp-label">Pro</span>
         </div>
         <div className="asp-divider" />
         <div className="admin-stat-pill">
@@ -1013,7 +1013,7 @@ export default function AdminDashboard() {
                   <span className="health-val">{stats.total ? `${(stats.active/stats.total*100).toFixed(1)}%` : '—'}</span>
                 </div>
                 <div className="health-row">
-                  <span className="health-label">Premium Adoption</span>
+                  <span className="health-label">Pro Adoption</span>
                   <div className="health-bar-wrap">
                     <div className="health-bar" style={{ width: stats.total ? `${(stats.pro/stats.total*100).toFixed(0)}%` : '0%', background: 'var(--accent)' }}/>
                   </div>

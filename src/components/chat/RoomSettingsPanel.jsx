@@ -168,7 +168,7 @@ export default function RoomSettingsPanel({ roomId, onClose, initialTab = 'info'
     try {
       const results = await api.searchUsers(q)
       setSearchResults(results.filter(u => !roomMembers.find(m => m.userId === u.userId)))
-    } catch {}
+    } catch { setSearchResults([]) /* api.req already showed the error toast */ }
   }
 
   /*
@@ -259,7 +259,7 @@ export default function RoomSettingsPanel({ roomId, onClose, initialTab = 'info'
     try {
       await api.deleteMedia(item.mediaId)
       setMedia(prev => prev.filter(m => m.mediaId !== item.mediaId))
-    } catch {}
+    } catch { /* api.req already showed the error toast; the file stays listed */ }
   }
 
   const handleMediaForward = (targetRoomId) => {

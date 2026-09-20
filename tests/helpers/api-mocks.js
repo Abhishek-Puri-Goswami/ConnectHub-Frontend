@@ -64,7 +64,9 @@ export const MOCK_DM_ROOM = {
   memberCount: 2,
 }
 
+// Same fields as message-service's Message entity (the chat store keys messages by messageId)
 export const MOCK_MESSAGE = {
+  messageId: 'msg-1',
   id: 'msg-1',
   roomId: 'room-1',
   senderId: 'user-1',

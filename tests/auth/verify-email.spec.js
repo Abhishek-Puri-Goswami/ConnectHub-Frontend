@@ -45,7 +45,7 @@ test.describe('Verify Email Page', () => {
   test('renders verify email page with OTP inputs and masked email', async ({ page }) => {
     await gotoVerifyEmail(page, 'jane@example.com')
 
-    await expect(page.getByRole('heading', { name: /Verify your email/i })).toBeVisible()
+    await expect(page.getByRole('heading', { name: /Verify your account/i })).toBeVisible()
     // The email should be masked e.g. "ja***@example.com"
     await expect(page.getByText(/ja\*+@example\.com/)).toBeVisible()
 
@@ -82,7 +82,7 @@ test.describe('Verify Email Page', () => {
 
   // ── OTP input behavior ────────────────────────────────────────────────────
 
-  test('enables verify button after all 6 digits are entered', async ({ page }) => {
+  test('auto-submits when all 6 digits are entered (button shows Verifying…)', async ({ page }) => {
     // Mock the verify endpoint to hang so auto-verify doesn't clear OTP state
     await page.route('**/api/v1/auth/verify-registration-otp', async (route) => {
       await new Promise(() => {}) // never resolves
@@ -94,9 +94,11 @@ test.describe('Verify Email Page', () => {
       await otpInputs.nth(i).fill(String(i + 1))
     }
 
-    // With 6 digits entered, auto-verify fires immediately (loading state shows "Verifying…")
-    // Button is enabled regardless of loading state (only disabled when otp.length !== 6)
-    await expect(page.getByRole('button', { name: /Verify email|Verifying/i })).toBeEnabled()
+    // The 6th digit triggers verification straight away; while the request is pending the button reads
+    // "Verifying…" and is disabled so it cannot be submitted twice.
+    const button = page.getByRole('button', { name: /Verifying/i })
+    await expect(button).toBeVisible()
+    await expect(button).toBeDisabled()
   })
 
   test('auto-moves focus to next OTP box after each digit', async ({ page }) => {
@@ -110,7 +112,7 @@ test.describe('Verify Email Page', () => {
 
   // ── Successful verification ───────────────────────────────────────────────
 
-  test('verifies OTP and navigates to /chat on success', async ({ page }) => {
+  test('verifies OTP, then Get Started signs the user in and opens /chat', async ({ page }) => {
     await mockVerifyOtp(page)
     await mockChatApis(page)
     await gotoVerifyEmail(page)
@@ -120,10 +122,15 @@ test.describe('Verify Email Page', () => {
       await otpInputs.nth(i).fill(String(i + 1))
     }
 
+    // Verification finishes first; the user then confirms with "Get Started"
+    await expect(page.getByText('Email verified')).toBeVisible()
+    await expect(page).toHaveURL(/verify-email/)
+    await page.getByRole('button', { name: /Get Started/i }).click()
+
     await expect(page).toHaveURL(/\/chat/)
   })
 
-  test('auto-verifies when 6th digit is typed without clicking button', async ({ page }) => {
+  test('auto-verifies when the 6th digit is typed, without clicking Verify email', async ({ page }) => {
     await mockVerifyOtp(page)
     await mockChatApis(page)
     await gotoVerifyEmail(page)
@@ -134,8 +141,9 @@ test.describe('Verify Email Page', () => {
       await otpInputs.nth(i).fill(String(i + 1))
     }
 
-    // Should navigate automatically without button click
-    await expect(page).toHaveURL(/\/chat/, { timeout: 5000 })
+    // Verified without ever pressing "Verify email"; the page waits for the user to press "Get Started"
+    await expect(page.getByText('Email verified')).toBeVisible({ timeout: 5000 })
+    await expect(page.getByRole('button', { name: /Get Started/i })).toBeEnabled()
   })
 
   // ── Failed verification ───────────────────────────────────────────────────

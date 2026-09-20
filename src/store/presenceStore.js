@@ -40,7 +40,7 @@ export const usePresenceStore = create((set, get) => ({
       if (p?.status) {
         set({ userStatus: p.status, prevStatus: p.status, isAutoAway: false })
       }
-    } catch {}
+    } catch { /* best-effort: never interrupt the user (presence) */ }
   },
 
   /*
@@ -49,7 +49,7 @@ export const usePresenceStore = create((set, get) => ({
    */
   setStatus: async (userId, status) => {
     set({ userStatus: status, prevStatus: status, isAutoAway: false })
-    try { await api.setPresenceStatus(userId, status) } catch {}
+    try { await api.setPresenceStatus(userId, status) } catch { /* best-effort: never interrupt the user (presence) */ }
   },
 
   /*
@@ -61,7 +61,7 @@ export const usePresenceStore = create((set, get) => ({
     const { userStatus, isAutoAway } = get()
     if (isAutoAway || userStatus !== 'ONLINE') return   // don't clobber manual statuses
     set({ prevStatus: userStatus, userStatus: 'AWAY', isAutoAway: true })
-    try { await api.setPresenceStatus(userId, 'AWAY') } catch {}
+    try { await api.setPresenceStatus(userId, 'AWAY') } catch { /* best-effort: never interrupt the user (presence) */ }
   },
 
   /*
@@ -73,6 +73,6 @@ export const usePresenceStore = create((set, get) => ({
     if (!isAutoAway) return
     const restore = prevStatus || 'ONLINE'
     set({ userStatus: restore, isAutoAway: false })
-    try { await api.setPresenceStatus(userId, restore) } catch {}
+    try { await api.setPresenceStatus(userId, restore) } catch { /* best-effort: never interrupt the user (presence) */ }
   },
 }))

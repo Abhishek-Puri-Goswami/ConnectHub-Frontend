@@ -138,12 +138,12 @@ test.describe('Smoke — Live API Gateway (SMOKE_LIVE=true)', () => {
   })
 
   liveTest('auth-service login returns a JWT token', async ({ request }) => {
-    const res = await request.post('http://localhost:8080/api/v1/auth/login', {
-      data: {
-        email: process.env.ADMIN_EMAIL || 'admin@connecthub.com',
-        password: process.env.ADMIN_PASSWORD || 'Admin1@ConnectHub',
-      }
-    })
+    // Real credentials come from the environment (e.g. PLATFORM_ADMIN_EMAIL/PASSWORD from the backend .env);
+    // there are deliberately no built-in defaults.
+    const email = process.env.ADMIN_EMAIL
+    const password = process.env.ADMIN_PASSWORD
+    test.skip(!email || !password, 'set ADMIN_EMAIL and ADMIN_PASSWORD to run this check')
+    const res = await request.post('http://localhost:8080/api/v1/auth/login', { data: { email, password } })
     expect(res.status()).toBe(200)
     const body = await res.json()
     expect(body.accessToken).toBeTruthy()
@@ -157,7 +157,7 @@ test.describe('Smoke — Live API Gateway (SMOKE_LIVE=true)', () => {
     expect(body.websocket).toBe(true)
   })
 
-  liveTest('Eureka dashboard is accessible', async ({ request }) => {
+  liveTest('Eureka registry is up (health is public; everything else needs credentials)', async ({ request }) => {
     const res = await request.get('http://localhost:8761/actuator/health')
     expect(res.status()).toBe(200)
   })

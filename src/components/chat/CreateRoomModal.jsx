@@ -81,7 +81,7 @@ export default function CreateRoomModal({ onClose, initialTab = 'group' }) {
     try {
       const results = await api.searchUsers(q)
       setSearchResults(results.filter(u => u.userId !== user.userId))
-    } catch {}
+    } catch { setSearchResults([]) /* api.req already showed the error toast */ }
   }
 
   /*
